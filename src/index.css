@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Heebo', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-weight: 350;
+    letter-spacing: -0.01em;
+  }
+  
+  .font-serif, h1, h2, h3, .royal-heading {
+    font-family: 'Heebo', 'Rubik', sans-serif;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+  }
+
+  .font-script {
+    font-family: 'Caveat', cursive;
+  }
+}
+
+/* Custom scrollbars in soft pastel pink */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #fbcfe8;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #f472b6;
+}
+
+/* Dotted memo note paper background */
+.dotted-paper {
+  background-image: radial-gradient(#f472b6 0.75px, transparent 0.75px);
+  background-size: 13px 13px;
+}
+
+/* Planner lined paper background */
+.lined-paper {
+  background-image: repeating-linear-gradient(transparent, transparent 25px, #fce7f3 25px, #fce7f3 26px);
+}
+
+/* Cute Scallop Border Effect */
+.scallop-border {
+  border-style: solid;
+  border-width: 2px;
+  border-color: #fbcfe8;
+}
+
+/* Print styles for printing days or monthly schedules */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+}
