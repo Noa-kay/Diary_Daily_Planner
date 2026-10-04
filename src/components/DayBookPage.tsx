@@ -380,35 +380,33 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
       </div>
 
       {/* ========================================================
-          IMPORTANT EVENTS (Appears inside day's square in Monthly Calendar)
+          IMPORTANT EVENTS (Aesthetic Stationery Ribbon Card)
          ======================================================== */}
-      <div className="mb-4 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-rose-50/95 via-[#fff5f8] to-amber-50/70 border border-rose-200/90 shadow-2xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+      <div className="mb-5 p-3.5 sm:p-4 rounded-2xl bg-[#fff8fa] border border-pink-200/90 shadow-xs relative">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-rose-400 to-pink-400 text-white flex items-center justify-center shadow-2xs">
-              <Star className="w-3.5 h-3.5 fill-white text-white" />
-            </div>
+            <span className="text-lg select-none">🎀</span>
             <div>
-              <h3 className="text-xs font-bold text-rose-950 uppercase tracking-wider flex items-center gap-1.5">
+              <h3 className="text-xs sm:text-sm font-serif font-bold text-pink-950 uppercase tracking-wider flex items-center gap-1.5">
                 <span>Important Events & Occasions</span>
                 {importantEvents.length > 0 && (
-                  <span className="text-[10px] lowercase font-semibold text-rose-600 bg-rose-100/80 px-2 py-0.2 rounded-full border border-rose-200">
-                    {importantEvents.length} {importantEvents.length === 1 ? 'event' : 'events'}
+                  <span className="text-[10px] font-sans font-medium text-pink-600 bg-pink-100/80 px-2 py-0.5 rounded-full border border-pink-200">
+                    {importantEvents.length}
                   </span>
                 )}
               </h3>
             </div>
           </div>
           
-          <div className="flex items-center gap-1 text-[11px] font-medium text-rose-700 bg-white/90 px-2.5 py-1 rounded-full border border-rose-200 self-start sm:self-auto shadow-2xs">
-            <CalendarIcon className="w-3 h-3 text-rose-500" />
-            <span>Appears directly in this date's box on the Monthly Calendar 📅</span>
+          <div className="flex items-center gap-1.5 text-[11px] font-medium text-pink-700 bg-white/90 px-3 py-1 rounded-full border border-pink-200 self-start sm:self-auto shadow-2xs">
+            <CalendarIcon className="w-3 h-3 text-pink-500" />
+            <span>Synced to Monthly Calendar 📅</span>
           </div>
         </div>
 
-        {/* Existing Events Chips */}
-        {importantEvents.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
+        {/* Existing Events List */}
+        {importantEvents.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-2 mb-3">
             {importantEvents.map((evt, idx) => {
               const isEditing = editingEventIndex === idx;
 
@@ -416,7 +414,7 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                 return (
                   <div
                     key={idx}
-                    className="inline-flex items-center gap-1 p-1 bg-white rounded-xl border-2 border-rose-400 shadow-sm"
+                    className="inline-flex items-center gap-1.5 p-1 bg-white rounded-xl border-2 border-pink-400 shadow-xs"
                   >
                     <input
                       type="text"
@@ -431,13 +429,13 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                           handleCancelEditEvent();
                         }
                       }}
-                      className="px-2 py-0.5 text-xs text-rose-950 bg-rose-50/40 rounded-lg focus:outline-none min-w-[160px] sm:min-w-[200px]"
+                      className="px-2.5 py-1 text-xs text-pink-950 bg-pink-50/40 rounded-lg focus:outline-none min-w-[180px] sm:min-w-[220px]"
                     />
                     <button
                       type="button"
                       onClick={() => handleSaveEditEvent(idx)}
-                      className="p-1 rounded-md bg-rose-500 hover:bg-rose-600 text-white transition cursor-pointer"
-                      title="Save edit (Enter)"
+                      className="p-1 rounded-md bg-pink-500 hover:bg-pink-600 text-white transition cursor-pointer"
+                      title="Save (Enter)"
                     >
                       <Check className="w-3.5 h-3.5" />
                     </button>
@@ -454,37 +452,44 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
               }
 
               return (
-                <span
+                <div
                   key={idx}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-rose-200 shadow-2xs text-xs font-semibold text-rose-950 group hover:border-rose-400 transition"
+                  className="group inline-flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-xl bg-white border border-pink-200/90 shadow-2xs hover:border-pink-400 transition-all text-xs"
                 >
-                  <span className="text-rose-500 text-xs">⭐</span>
+                  <span className="text-pink-500 text-xs font-bold select-none">✦</span>
                   <span
                     onClick={() => handleStartEditEvent(idx, evt)}
-                    className="cursor-pointer hover:underline decoration-rose-300 transition"
-                    title="Click to edit event"
+                    className="font-medium text-pink-950 cursor-pointer hover:text-pink-600 transition"
+                    title="Click to edit event text"
                   >
                     {evt}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => handleStartEditEvent(idx, evt)}
-                    className="opacity-70 group-hover:opacity-100 text-stone-400 hover:text-rose-600 p-0.5 rounded-md hover:bg-rose-50 transition cursor-pointer ml-0.5"
-                    title="Edit event"
-                  >
-                    <Pencil className="w-3 h-3" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveEvent(idx)}
-                    className="text-stone-300 hover:text-rose-600 p-0.5 rounded-md hover:bg-rose-50 transition cursor-pointer"
-                    title="Remove this event"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </span>
+                  <div className="flex items-center gap-0.5 ml-1 border-l border-pink-100 pl-1">
+                    <button
+                      type="button"
+                      onClick={() => handleStartEditEvent(idx, evt)}
+                      className="p-1 rounded-md text-stone-400 hover:text-pink-600 hover:bg-pink-50 transition cursor-pointer"
+                      title="Edit event"
+                    >
+                      <Pencil className="w-3 h-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveEvent(idx)}
+                      className="p-1 rounded-md text-stone-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                      title="Remove this event"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
               );
             })}
+          </div>
+        ) : (
+          <div className="mb-3 py-2 px-3 rounded-xl bg-white/70 border border-dashed border-pink-200/80 text-center text-xs text-pink-400 italic flex items-center justify-center gap-1.5">
+            <span>✨</span>
+            <span>No special events set for this date • Add a birthday, appointment, or trip below</span>
           </div>
         )}
 
@@ -496,13 +501,13 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
               value={newEventText}
               onChange={(e) => setNewEventText(e.target.value)}
               placeholder="Write important event (e.g. Maya's Birthday 🎂, Dentist 14:00 🦷, Flight to Paris ✈️)..."
-              className="w-full px-3 py-1.5 text-xs bg-white rounded-xl border border-rose-200 focus:outline-none focus:ring-1 focus:ring-rose-400 text-rose-950 placeholder:text-rose-300 shadow-2xs"
+              className="w-full px-3.5 py-2 text-xs bg-white rounded-xl border border-pink-200 focus:outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200/50 text-pink-950 placeholder:text-pink-300 shadow-2xs transition"
             />
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0 justify-between sm:justify-start">
             {/* Quick emoji presets */}
-            <div className="flex items-center gap-1 overflow-x-auto">
+            <div className="flex items-center gap-1">
               {[
                 { icon: '🎂', label: 'Birthday' },
                 { icon: '✈️', label: 'Trip' },
@@ -515,10 +520,10 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                   key={item.icon}
                   type="button"
                   onClick={() => setNewEventText((prev) => (prev ? `${prev} ${item.icon}` : `${item.label} ${item.icon}`))}
-                  className="px-2 py-1 rounded-lg bg-white/80 hover:bg-white text-stone-700 text-[11px] border border-rose-100 transition cursor-pointer hover:border-rose-300 shadow-2xs"
+                  className="px-2 py-1 rounded-lg bg-white hover:bg-pink-50 text-stone-700 text-xs border border-pink-100 hover:border-pink-300 transition cursor-pointer shadow-2xs"
                   title={`Add ${item.label}`}
                 >
-                  {item.icon} <span className="hidden md:inline text-[10px]">{item.label}</span>
+                  {item.icon}
                 </button>
               ))}
             </div>
@@ -526,9 +531,10 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
             <button
               type="submit"
               disabled={!newEventText.trim()}
-              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 disabled:opacity-40 text-white text-xs font-semibold shadow-2xs transition cursor-pointer shrink-0"
+              className="px-4 py-2 rounded-xl bg-pink-500 hover:bg-pink-600 disabled:opacity-40 text-white text-xs font-semibold shadow-2xs transition cursor-pointer shrink-0 flex items-center gap-1"
             >
-              + Add Event
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Event</span>
             </button>
           </div>
         </form>

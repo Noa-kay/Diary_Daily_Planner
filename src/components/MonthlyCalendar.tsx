@@ -252,7 +252,7 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
                 key={cell.key}
                 type="button"
                 onClick={() => setSelectedDayKey(cell.key)}
-                className={`relative min-h-[70px] sm:min-h-[90px] p-1.5 sm:p-2 rounded-xl border text-right transition-all flex flex-col justify-between cursor-pointer select-none ${
+                className={`relative h-[85px] sm:h-[110px] p-1.5 sm:p-2 rounded-xl border text-right transition-all flex flex-col justify-between cursor-pointer select-none overflow-hidden ${
                   isSelected
                     ? 'ring-2 ring-indigo-500 border-indigo-400 bg-indigo-50/30'
                     : cell.isCurrentMonth
@@ -261,7 +261,7 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
                 } ${isPeriod ? 'bg-rose-50/40 border-rose-200' : ''}`}
               >
                 {/* Day Number and Badges */}
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between shrink-0">
                   <span
                     className={`inline-flex items-center justify-center w-6 h-6 text-xs rounded-full font-bold ${
                       isToday
@@ -301,24 +301,24 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
                 </div>
 
                 {/* Indicators inside the cell */}
-                <div className="mt-1 space-y-1">
+                <div className="flex-1 min-h-0 my-0.5 overflow-hidden flex flex-col justify-start space-y-0.5">
                   {dayEvents.length > 0 && (
-                    <div className="space-y-1">
-                      {dayEvents.map((evt, idx) => (
+                    <div className="space-y-0.5 my-0.5">
+                      {dayEvents.slice(0, 2).map((evt, idx) => (
                         <div
                           key={idx}
                           title={evt}
-                          className="flex items-start gap-1 text-[10px] px-1 py-0.5 rounded-md font-semibold bg-rose-100 text-rose-900 border border-rose-200 whitespace-normal break-words leading-tight"
+                          className="flex items-start gap-1 text-[9px] sm:text-[9.5px] px-1 py-0.5 rounded-md font-medium bg-[#fff3f6] text-pink-950 border-l-[3px] border-l-pink-400 border-y border-r border-pink-200/70 leading-tight overflow-hidden"
                         >
-                          <span className="shrink-0 text-[10px] mt-0.5">⭐</span>
-                          <span className="break-words">{evt}</span>
+                          <span className="shrink-0 text-[9px] text-pink-500 mt-0.5 font-bold">✦</span>
+                          <span className="break-words line-clamp-1 flex-1">{evt}</span>
                         </div>
                       ))}
                     </div>
                   )}
 
                   {dayTasks.length > 0 && (
-                    <div className="flex items-center gap-1 text-[10px] text-stone-600 font-medium truncate">
+                    <div className="flex items-center gap-1 text-[9.5px] text-stone-600 font-medium truncate mt-auto">
                       <span
                         className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                           completedCount === dayTasks.length

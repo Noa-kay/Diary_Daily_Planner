@@ -256,7 +256,7 @@ export const MonthlyBookSpread: React.FC<MonthlyBookSpreadProps> = ({
               key={cell.key}
               type="button"
               onClick={() => onSelectDay(cell.key)}
-              className={`group relative min-h-[95px] sm:min-h-[120px] h-auto p-2 rounded-2xl text-left transition-all duration-200 flex flex-col justify-between border cursor-pointer ${
+              className={`group relative h-[120px] sm:h-[135px] p-1.5 sm:p-2 rounded-2xl text-left transition-all duration-200 flex flex-col justify-between border cursor-pointer overflow-hidden ${
                 isToday
                   ? 'bg-gradient-to-br from-pink-100 to-rose-100/90 border-pink-400 ring-2 ring-pink-300 shadow-md shadow-pink-200/50 scale-[1.01]'
                   : isSelected
@@ -267,11 +267,11 @@ export const MonthlyBookSpread: React.FC<MonthlyBookSpreadProps> = ({
               } ${isFlower ? 'bg-pink-100/70 border-pink-300' : ''}`}
             >
               {/* Header row in cell: Gregorian day on left, Hebrew day on right */}
-              <div className="w-full">
+              <div className="w-full shrink-0">
                 <div className="flex items-center justify-between w-full">
                   {/* Gregorian Day Number */}
                   <span
-                    className={`inline-flex items-center justify-center w-6 h-6 text-xs rounded-full font-medium shrink-0 transition ${
+                    className={`inline-flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 text-xs rounded-full font-medium shrink-0 transition ${
                       isToday
                         ? 'bg-pink-500 text-white shadow-2xs font-bold'
                         : isFlower
@@ -286,7 +286,7 @@ export const MonthlyBookSpread: React.FC<MonthlyBookSpreadProps> = ({
 
                   {/* Hebrew Date Letter (Strictly preserved in Hebrew) */}
                   <span
-                    className={`text-[11px] font-medium shrink-0 text-right px-1 ${
+                    className={`text-[10px] sm:text-[11px] font-medium shrink-0 text-right px-1 ${
                       cell.isCurrentMonth ? 'text-pink-700/80' : 'text-stone-300'
                     }`}
                   >
@@ -296,9 +296,9 @@ export const MonthlyBookSpread: React.FC<MonthlyBookSpreadProps> = ({
 
                 {/* Holiday Badge (Preserved in Hebrew) */}
                 {cell.hebrewInfo.holidayName && (
-                  <div className="w-full text-center mt-1">
+                  <div className="w-full text-center mt-0.5">
                     <span
-                      className="inline-block text-[9px] px-1.5 py-0.2 rounded-md bg-amber-100/80 text-amber-900 font-medium truncate max-w-full border border-amber-200/60 leading-tight"
+                      className="inline-block text-[8.5px] px-1 py-0.2 rounded-md bg-amber-100/80 text-amber-900 font-medium truncate max-w-full border border-amber-200/60 leading-tight"
                       title={cell.hebrewInfo.holidayName}
                     >
                       {cell.hebrewInfo.holidayName}
@@ -307,28 +307,46 @@ export const MonthlyBookSpread: React.FC<MonthlyBookSpreadProps> = ({
                 )}
               </div>
 
-              {/* Middle & Bottom: Events, Tasks & Mood Indicators inside the day */}
-              <div className="mt-1 space-y-1 w-full">
-                {/* Important Events Badges (Showing full text wrap) */}
+              {/* Middle: Events & Ideas (Contained, never spills out of cell) */}
+              <div className="flex-1 min-h-0 w-full my-0.5 overflow-hidden flex flex-col justify-start space-y-1">
+                {/* Important Events (Chic Planner Washi Ribbon Tags) */}
                 {dayEvents.length > 0 && (
-                  <div className="space-y-1 w-full">
-                    {dayEvents.map((evt, idx) => (
+                  <div className="space-y-0.5 w-full">
+                    {dayEvents.slice(0, 2).map((evt, idx) => (
                       <div
                         key={idx}
                         title={evt}
-                        className="flex items-start gap-1 text-[10px] sm:text-[11px] px-1.5 py-1 rounded-lg font-semibold bg-gradient-to-r from-rose-100 via-[#ffe8ee] to-pink-100 text-rose-950 border border-rose-300 shadow-2xs whitespace-normal break-words text-left leading-snug w-full"
+                        className="group/tag relative flex items-start gap-1 text-[9px] sm:text-[9.5px] px-1.5 py-0.5 rounded-md font-medium bg-[#fff3f6] hover:bg-[#ffeaf0] text-pink-950 border-l-[3px] border-l-pink-400 border-y border-r border-pink-200/70 shadow-2xs transition-all leading-tight break-words text-left w-full overflow-hidden"
                       >
-                        <span className="shrink-0 text-[11px] mt-0.5">⭐</span>
-                        <span className="break-words leading-tight flex-1">{evt}</span>
+                        <span className="text-[9px] text-pink-500 shrink-0 mt-0.5 select-none font-bold">✦</span>
+                        <span className="break-words leading-tight flex-1 line-clamp-2">{evt}</span>
                       </div>
                     ))}
+                    {dayEvents.length > 2 && (
+                      <span className="text-[8.5px] text-pink-600 font-semibold block text-right px-1 leading-none">
+                        +{dayEvents.length - 2} more
+                      </span>
+                    )}
                   </div>
                 )}
 
+                {/* Ideas & Thoughts dot */}
+                {hasIdeas && (
+                  <div className="flex items-center gap-1 text-[9px] text-amber-800 font-medium px-1 truncate">
+                    <Lightbulb className="w-2.5 h-2.5 text-amber-500 shrink-0" />
+                    <span className="truncate hidden sm:inline">
+                      {dayIdeas[0].title}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Bottom: Tasks pill & Mood/Flower (Fixed at bottom) */}
+              <div className="w-full shrink-0 mt-auto pt-0.5 space-y-0.5">
                 {/* Tasks pill */}
                 {dayTasks.length > 0 && (
                   <div
-                    className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-lg font-medium truncate ${
+                    className={`flex items-center gap-1 text-[9.5px] px-1.5 py-0.5 rounded-lg font-medium truncate ${
                       completedCount === dayTasks.length
                         ? 'bg-emerald-100/80 text-emerald-800'
                         : 'bg-pink-100 text-pink-900'
@@ -350,21 +368,11 @@ export const MonthlyBookSpread: React.FC<MonthlyBookSpreadProps> = ({
                   </div>
                 )}
 
-                {/* Ideas & Thoughts dot */}
-                {hasIdeas && (
-                  <div className="flex items-center gap-1 text-[10px] text-amber-800 font-medium px-1 truncate">
-                    <Lightbulb className="w-2.5 h-2.5 text-amber-500 shrink-0" />
-                    <span className="truncate hidden sm:inline">
-                      {dayIdeas[0].title}
-                    </span>
-                  </div>
-                )}
-
                 {/* Day Mood Face & 🌸 Indicator Row */}
-                <div className="flex items-center justify-between text-xs px-1">
+                <div className="flex items-center justify-between text-xs px-0.5 min-h-[14px]">
                   {/* Mood Face if chosen for this day */}
                   {dayLogs[cell.key]?.mood ? (
-                    <span className="text-sm select-none leading-none" title="Mood Today">
+                    <span className="text-xs select-none leading-none" title="Mood Today">
                       {dayLogs[cell.key].mood === 'great'
                         ? '💖'
                         : dayLogs[cell.key].mood === 'creative'
