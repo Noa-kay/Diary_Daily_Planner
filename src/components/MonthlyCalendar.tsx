@@ -303,15 +303,15 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
                 {/* Indicators inside the cell */}
                 <div className="mt-1 space-y-1">
                   {dayEvents.length > 0 && (
-                    <div className="space-y-0.5">
-                      {dayEvents.slice(0, 2).map((evt, idx) => (
+                    <div className="space-y-1">
+                      {dayEvents.map((evt, idx) => (
                         <div
                           key={idx}
                           title={evt}
-                          className="flex items-center gap-1 text-[9.5px] px-1 py-0.5 rounded-md font-semibold bg-rose-100 text-rose-900 border border-rose-200 truncate"
+                          className="flex items-start gap-1 text-[10px] px-1 py-0.5 rounded-md font-semibold bg-rose-100 text-rose-900 border border-rose-200 whitespace-normal break-words leading-tight"
                         >
-                          <span className="shrink-0 text-[10px]">⭐</span>
-                          <span className="truncate">{evt}</span>
+                          <span className="shrink-0 text-[10px] mt-0.5">⭐</span>
+                          <span className="break-words">{evt}</span>
                         </div>
                       ))}
                     </div>

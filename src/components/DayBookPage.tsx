@@ -18,6 +18,8 @@ import {
   Cookie,
   Smile,
   Star,
+  Pencil,
+  Check,
   Calendar as CalendarIcon
 } from 'lucide-react';
 import { 
@@ -221,6 +223,8 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
   // Important Events for Monthly Calendar
   const importantEvents = dayLog?.importantEvents || [];
   const [newEventText, setNewEventText] = useState('');
+  const [editingEventIndex, setEditingEventIndex] = useState<number | null>(null);
+  const [editingEventText, setEditingEventText] = useState('');
 
   const handleAddEvent = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -231,9 +235,35 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
     setNewEventText('');
   };
 
+  const handleStartEditEvent = (idx: number, currentText: string) => {
+    setEditingEventIndex(idx);
+    setEditingEventText(currentText);
+  };
+
+  const handleSaveEditEvent = (idx: number) => {
+    const trimmed = editingEventText.trim();
+    if (!trimmed) {
+      handleRemoveEvent(idx);
+    } else {
+      const updated = [...importantEvents];
+      updated[idx] = trimmed;
+      onUpdateDayLog(selectedDate, { importantEvents: updated });
+    }
+    setEditingEventIndex(null);
+    setEditingEventText('');
+  };
+
+  const handleCancelEditEvent = () => {
+    setEditingEventIndex(null);
+    setEditingEventText('');
+  };
+
   const handleRemoveEvent = (indexToRemove: number) => {
     const updated = importantEvents.filter((_, idx) => idx !== indexToRemove);
     onUpdateDayLog(selectedDate, { importantEvents: updated });
+    if (editingEventIndex === indexToRemove) {
+      setEditingEventIndex(null);
+    }
   };
 
   // Thoughts & Gratitude
@@ -378,24 +408,83 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
 
         {/* Existing Events Chips */}
         {importantEvents.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mb-2.5">
-            {importantEvents.map((evt, idx) => (
-              <span
-                key={idx}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white border border-rose-200 shadow-2xs text-xs font-semibold text-rose-950 group hover:border-rose-400 transition"
-              >
-                <span className="text-rose-500 text-xs">⭐</span>
-                <span>{evt}</span>
-                <button
-                  type="button"
-                  onClick={() => handleRemoveEvent(idx)}
-                  className="text-stone-300 hover:text-rose-600 p-0.5 rounded-full transition cursor-pointer"
-                  title="Remove this event"
+          <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
+            {importantEvents.map((evt, idx) => {
+              const isEditing = editingEventIndex === idx;
+
+              if (isEditing) {
+                return (
+                  <div
+                    key={idx}
+                    className="inline-flex items-center gap-1 p-1 bg-white rounded-xl border-2 border-rose-400 shadow-sm"
+                  >
+                    <input
+                      type="text"
+                      autoFocus
+                      value={editingEventText}
+                      onChange={(e) => setEditingEventText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleSaveEditEvent(idx);
+                        } else if (e.key === 'Escape') {
+                          handleCancelEditEvent();
+                        }
+                      }}
+                      className="px-2 py-0.5 text-xs text-rose-950 bg-rose-50/40 rounded-lg focus:outline-none min-w-[160px] sm:min-w-[200px]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleSaveEditEvent(idx)}
+                      className="p-1 rounded-md bg-rose-500 hover:bg-rose-600 text-white transition cursor-pointer"
+                      title="Save edit (Enter)"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCancelEditEvent}
+                      className="p-1 rounded-md text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition cursor-pointer"
+                      title="Cancel (Esc)"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                );
+              }
+
+              return (
+                <span
+                  key={idx}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-rose-200 shadow-2xs text-xs font-semibold text-rose-950 group hover:border-rose-400 transition"
                 >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </span>
-            ))}
+                  <span className="text-rose-500 text-xs">⭐</span>
+                  <span
+                    onClick={() => handleStartEditEvent(idx, evt)}
+                    className="cursor-pointer hover:underline decoration-rose-300 transition"
+                    title="Click to edit event"
+                  >
+                    {evt}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleStartEditEvent(idx, evt)}
+                    className="opacity-70 group-hover:opacity-100 text-stone-400 hover:text-rose-600 p-0.5 rounded-md hover:bg-rose-50 transition cursor-pointer ml-0.5"
+                    title="Edit event"
+                  >
+                    <Pencil className="w-3 h-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveEvent(idx)}
+                    className="text-stone-300 hover:text-rose-600 p-0.5 rounded-md hover:bg-rose-50 transition cursor-pointer"
+                    title="Remove this event"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </span>
+              );
+            })}
           </div>
         )}
 

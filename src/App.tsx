@@ -27,6 +27,8 @@ import { CycleTracker } from './components/CycleTracker';
 import { BackupModal } from './components/BackupModal';
 import { PinLockScreen, PinSettingsModal } from './components/PinLockModal';
 import { PlannerCover } from './components/PlannerCover';
+import { useTimeReminders } from './hooks/useTimeReminders';
+import { ReminderChimeAlert } from './components/ReminderChimeAlert';
 
 export default function App() {
   const [db, setDb] = useState<JournalDatabase>(() => loadJournalDatabase());
@@ -39,6 +41,13 @@ export default function App() {
   const [isLocked, setIsLocked] = useState<boolean>(() => {
     return Boolean(db.settings?.pinCode && db.settings?.isPinLocked);
   });
+
+  const soundEnabled = db.settings?.soundAlertsEnabled !== false;
+  const { activeAlert, dismissAlert, triggerTestSound } = useTimeReminders(
+    db.tasks,
+    db.dayLogs,
+    soundEnabled
+  );
 
   // Automatically persist to localStorage
   useEffect(() => {
@@ -221,6 +230,11 @@ export default function App() {
 
   return (
     <div className={`min-h-screen ${deskBgClass} transition-colors duration-500 font-sans`}>
+      {/* Active Audio Reminder Banner */}
+      {activeAlert && (
+        <ReminderChimeAlert alert={activeAlert} onDismiss={dismissAlert} />
+      )}
+
       {/* If PIN is locked, block view with lock screen */}
       {isLocked && db.settings.pinCode ? (
         <PinLockScreen currentPin={db.settings.pinCode} onUnlock={handleUnlock} />
@@ -243,6 +257,11 @@ export default function App() {
             onToggleLock={handleToggleLock}
             hasTasksToday={hasTasksToday}
             onShowCover={() => setShowCover(true)}
+            soundAlertsEnabled={soundEnabled}
+            onToggleSoundAlerts={() =>
+              handleUpdateSettings({ soundAlertsEnabled: !soundEnabled })
+            }
+            onTestChime={triggerTestSound}
           >
             {/* VIEW 1: Home View - Monthly Calendar Spread */}
             {currentView === 'calendar' && (

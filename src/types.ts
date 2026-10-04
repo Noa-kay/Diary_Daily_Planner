@@ -117,6 +117,7 @@ export interface AppSettings {
   pinCode?: string; // 4 digits, optional
   isPinLocked: boolean;
   userDisplayName?: string;
+  soundAlertsEnabled?: boolean; // Gentle chime reminder when events/tasks approach
   monthlyNotes?: Record<string, string>; // YYYY-MM -> monthly goals
 }
 

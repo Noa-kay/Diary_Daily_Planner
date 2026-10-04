@@ -8,7 +8,9 @@ import {
   Lock, 
   Unlock, 
   Printer, 
-  Sparkles
+  Sparkles,
+  Bell,
+  BellOff
 } from 'lucide-react';
 import { BookView, AppTheme, AppSettings } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
@@ -27,6 +29,9 @@ interface BookContainerProps {
   onToggleLock: () => void;
   hasTasksToday: boolean;
   onShowCover?: () => void;
+  soundAlertsEnabled?: boolean;
+  onToggleSoundAlerts?: () => void;
+  onTestChime?: () => void;
 }
 
 const THEMES: { id: AppTheme; label: string; dotColor: string }[] = [
@@ -48,6 +53,9 @@ export const BookContainer: React.FC<BookContainerProps> = ({
   onToggleLock,
   hasTasksToday,
   onShowCover,
+  soundAlertsEnabled = true,
+  onToggleSoundAlerts,
+  onTestChime,
 }) => {
   const [showAffirmation, setShowAffirmation] = useState(false);
   const { isInstalled } = usePWAInstall();
@@ -106,6 +114,32 @@ export const BookContainer: React.FC<BookContainerProps> = ({
             >
               <HardDrive className="w-3.5 h-3.5 text-pink-700" />
               <span className="hidden md:inline">Backup</span>
+            </button>
+          )}
+
+          {/* Sound Alert Toggle with Test Option */}
+          {onToggleSoundAlerts && (
+            <button
+              onClick={onToggleSoundAlerts}
+              className={`p-1.5 px-2.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 border shadow-2xs ${
+                soundAlertsEnabled
+                  ? 'text-rose-900 bg-gradient-to-r from-rose-100 to-pink-100 hover:from-rose-200 hover:to-pink-200 border-rose-300'
+                  : 'text-stone-400 bg-stone-100/70 hover:bg-stone-200/70 border-stone-200'
+              }`}
+              title={
+                soundAlertsEnabled
+                  ? 'Chime Reminders ON (Gentle audio alert for upcoming tasks/events). Click to mute.'
+                  : 'Chime Reminders MUTED. Click to turn ON.'
+              }
+            >
+              {soundAlertsEnabled ? (
+                <Bell className="w-3.5 h-3.5 text-rose-600 fill-rose-300" />
+              ) : (
+                <BellOff className="w-3.5 h-3.5 text-stone-400" />
+              )}
+              <span className="hidden md:inline text-xs font-medium">
+                {soundAlertsEnabled ? 'Chime ON' : 'Muted'}
+              </span>
             </button>
           )}
 

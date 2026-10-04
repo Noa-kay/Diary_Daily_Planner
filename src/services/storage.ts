@@ -43,6 +43,7 @@ const defaultSettings: AppSettings = {
   averagePeriodLength: 5,
   isPinLocked: false,
   userDisplayName: 'My Daily Planner',
+  soundAlertsEnabled: true,
 };
 
 function createInitialDatabase(): JournalDatabase {

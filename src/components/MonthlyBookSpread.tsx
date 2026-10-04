@@ -256,7 +256,7 @@ export const MonthlyBookSpread: React.FC<MonthlyBookSpreadProps> = ({
               key={cell.key}
               type="button"
               onClick={() => onSelectDay(cell.key)}
-              className={`group relative min-h-[85px] sm:min-h-[105px] p-2 rounded-2xl text-left transition-all duration-200 flex flex-col justify-between border cursor-pointer overflow-hidden ${
+              className={`group relative min-h-[95px] sm:min-h-[120px] h-auto p-2 rounded-2xl text-left transition-all duration-200 flex flex-col justify-between border cursor-pointer ${
                 isToday
                   ? 'bg-gradient-to-br from-pink-100 to-rose-100/90 border-pink-400 ring-2 ring-pink-300 shadow-md shadow-pink-200/50 scale-[1.01]'
                   : isSelected
@@ -309,24 +309,19 @@ export const MonthlyBookSpread: React.FC<MonthlyBookSpreadProps> = ({
 
               {/* Middle & Bottom: Events, Tasks & Mood Indicators inside the day */}
               <div className="mt-1 space-y-1 w-full">
-                {/* Important Events Badges (Prominently displayed) */}
+                {/* Important Events Badges (Showing full text wrap) */}
                 {dayEvents.length > 0 && (
-                  <div className="space-y-0.5 w-full">
-                    {dayEvents.slice(0, 2).map((evt, idx) => (
+                  <div className="space-y-1 w-full">
+                    {dayEvents.map((evt, idx) => (
                       <div
                         key={idx}
                         title={evt}
-                        className="flex items-center gap-1 text-[9.5px] px-1.5 py-0.5 rounded-md font-semibold bg-gradient-to-r from-rose-200/90 to-pink-200/80 text-rose-950 border border-rose-300 shadow-2xs truncate leading-tight"
+                        className="flex items-start gap-1 text-[10px] sm:text-[11px] px-1.5 py-1 rounded-lg font-semibold bg-gradient-to-r from-rose-100 via-[#ffe8ee] to-pink-100 text-rose-950 border border-rose-300 shadow-2xs whitespace-normal break-words text-left leading-snug w-full"
                       >
-                        <span className="shrink-0 text-[10px]">⭐</span>
-                        <span className="truncate">{evt}</span>
+                        <span className="shrink-0 text-[11px] mt-0.5">⭐</span>
+                        <span className="break-words leading-tight flex-1">{evt}</span>
                       </div>
                     ))}
-                    {dayEvents.length > 2 && (
-                      <span className="text-[8.5px] text-rose-700 font-bold block text-right px-1 leading-none">
-                        +{dayEvents.length - 2} more
-                      </span>
-                    )}
                   </div>
                 )}
 
