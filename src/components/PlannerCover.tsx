@@ -64,7 +64,9 @@ export const PlannerCover: React.FC<PlannerCoverProps> = ({ onOpen, userDisplayN
           </div>
 
           <h1 className="text-2xl sm:text-3xl font-medium text-pink-950 tracking-tight mb-2">
-            {userDisplayName === 'יומני' ? 'My Daily Planner' : userDisplayName}
+            {!userDisplayName || userDisplayName === 'יומני' || userDisplayName === 'יומני המלכותי'
+              ? 'My Daily Planner'
+              : userDisplayName}
           </h1>
 
           <div className="w-12 h-0.5 bg-gradient-to-r from-transparent via-pink-400 to-transparent my-2" />

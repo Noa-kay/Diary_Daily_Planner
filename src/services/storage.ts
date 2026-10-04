@@ -42,7 +42,7 @@ const defaultSettings: AppSettings = {
   averageCycleLength: 28,
   averagePeriodLength: 5,
   isPinLocked: false,
-  userDisplayName: 'יומני המלכותי',
+  userDisplayName: 'My Daily Planner',
 };
 
 function createInitialDatabase(): JournalDatabase {
@@ -177,6 +177,9 @@ export function loadJournalDatabase(): JournalDatabase {
     const parsed = JSON.parse(raw) as JournalDatabase;
     // ensure migrations or missing fields
     if (!parsed.settings) parsed.settings = defaultSettings;
+    if (!parsed.settings.userDisplayName || parsed.settings.userDisplayName.includes('יומני')) {
+      parsed.settings.userDisplayName = 'My Daily Planner';
+    }
     if (!parsed.habits) parsed.habits = defaultHabits;
     if (!parsed.cycleLogs) parsed.cycleLogs = {};
     if (!parsed.dayLogs) parsed.dayLogs = {};

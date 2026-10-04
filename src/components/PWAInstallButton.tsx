@@ -54,32 +54,37 @@ export const PWAInstallButton: React.FC = () => {
               </button>
             </div>
 
-            <div className="mt-4 space-y-3.5 text-xs text-stone-700 leading-relaxed">
-              <div className="p-3 bg-pink-50/60 rounded-xl border border-pink-100">
-                <p className="font-medium text-pink-950 flex items-center gap-1.5 mb-1">
+            <div className="mt-4 space-y-3 text-xs text-stone-700 leading-relaxed text-right" dir="rtl">
+              <div className="p-3 bg-pink-50/80 rounded-xl border border-pink-200">
+                <p className="font-bold text-pink-950 flex items-center gap-1.5 mb-1 text-xs">
                   <Info className="w-4 h-4 text-pink-600 shrink-0" />
-                  Benefits of Desktop Installation:
+                  <span>100% אופליין – ללא תלות באינטרנט!</span>
                 </p>
-                <ul className="list-disc list-inside text-pink-900/80 space-y-1">
-                  <li>Works completely offline without internet connection.</li>
-                  <li>Opens in its own clean window directly from your Mac Dock or Windows Taskbar.</li>
-                  <li>Saves all personal diary entries locally on your device.</li>
-                </ul>
-              </div>
-
-              <div className="space-y-2">
-                <p className="font-medium text-pink-950">On Mac (Safari or Chrome):</p>
-                <p className="text-stone-600">
-                  • In Safari: Click <strong>File &gt; Add to Dock</strong>.<br />
-                  • In Chrome: Click the <strong>Install icon (computer with down arrow)</strong> in the URL bar, or click <strong>Settings (three dots) &gt; Install My Planner</strong>.
+                <p className="text-[11px] text-pink-900/90 leading-relaxed">
+                  האפליקציה שומרת את כל הנתונים, המשימות והמחשבות שלך <strong>בתוך המחשב בלבד</strong>. אין שום שרת ושום ענן, וניתן לנתק את האינטרנט לחלוטין.
                 </p>
               </div>
 
-              <div className="space-y-2">
-                <p className="font-medium text-pink-950">On Windows (Chrome / Edge):</p>
-                <p className="text-stone-600">
-                  Click the <strong>Install</strong> icon in the address bar to add My Planner to your Desktop.
-                </p>
+              {/* Mac Safari Instructions */}
+              <div className="p-3.5 bg-white rounded-xl border border-stone-200 space-y-2">
+                <div className="flex items-center gap-1.5 font-bold text-stone-900 text-xs">
+                  <span>🍏</span>
+                  <span>במחשב Mac (בדפדפן Safari שבו את נמצאת כעת):</span>
+                </div>
+                <div className="text-[11px] text-stone-700 space-y-1.5 pr-2">
+                  <p>1. בסרגל התפריטים העליון ביותר של מסך המק, לחצי על: <strong>קובץ (File)</strong>.</p>
+                  <p>2. לחצי על: <strong>הוסף ל-Dock‏ (Add to Dock...)</strong>.</p>
+                  <p>3. לחצי על <strong>הוסף (Add)</strong>.</p>
+                  <p className="text-pink-700 font-semibold pt-1">
+                    🎀 זהו! האפליקציה תופיע ב-Dock של המק כתוכנה עצמאית עם אייקון ורוד, ותיפתח ישירות כתוכנה ללא תלות באינטרנט!
+                  </p>
+                </div>
+              </div>
+
+              {/* In Chrome */}
+              <div className="p-2.5 bg-stone-50 rounded-xl border border-stone-200/70 space-y-1 text-[10px] text-stone-600">
+                <p className="font-semibold text-stone-800">במידה ואת פותחת דרך Google Chrome:</p>
+                <p>לחצי על תפריט 3 הנקודות ⋮ למעלה ➔ שמירה ושיתוף ➔ התקנת My Planner.</p>
               </div>
             </div>
 
