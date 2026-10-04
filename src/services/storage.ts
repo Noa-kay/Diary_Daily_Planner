@@ -1,4 +1,4 @@
-import { JournalDatabase, Task, IdeaEntry, CycleDayLog, DayLog, Habit, AppSettings } from '../types';
+import { JournalDatabase, Task, IdeaEntry, IdeaCategory, CycleDayLog, DayLog, Habit, AppSettings } from '../types';
 
 const STORAGE_KEY = 'offline_personal_journal_v1';
 

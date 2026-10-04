@@ -715,9 +715,9 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
       {/* ========================================================
           BOTTOM SPANNING SECTION: NOTES & INSPIRATION (Image 2 style)
          ======================================================== */}
-      <div className="mt-4 p-4 rounded-2xl bg-white border border-pink-200/90 shadow-2xs relative dotted-paper">
+      <div className="mt-4 p-3.5 sm:p-4 rounded-2xl bg-white border border-pink-200/90 shadow-2xs relative dotted-paper w-full max-w-full box-border overflow-hidden">
         {/* Pink washi tape strip at top of notes */}
-        <div className="w-16 h-2.5 bg-pink-200/90 mx-auto -mt-2 mb-2 rounded-xs shadow-2xs" />
+        <div className="w-16 h-2.5 bg-pink-200/90 mx-auto mb-2 rounded-xs shadow-2xs" />
 
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-xs font-bold text-pink-950 uppercase tracking-wider flex items-center gap-1">
@@ -732,7 +732,7 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
           value={dailyThoughts}
           onChange={(e) => onUpdateDayLog(selectedDate, { dailyThoughts: e.target.value })}
           placeholder="Jot down notes, sudden thoughts, project sparks or gentle reminders..."
-          className="w-full p-3 text-xs bg-white/95 rounded-xl border border-pink-200 focus:outline-none focus:ring-1 focus:ring-pink-300 text-pink-950 resize-none leading-relaxed shadow-2xs"
+          className="w-full max-w-full box-border p-3 text-xs bg-white/95 rounded-xl border border-pink-200 focus:outline-none focus:ring-1 focus:ring-pink-300 text-pink-950 resize-none leading-relaxed shadow-2xs"
         />
 
         {/* Bottom Quote (from Image 2) */}

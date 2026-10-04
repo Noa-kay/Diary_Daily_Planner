@@ -50,6 +50,7 @@ export const BookContainer: React.FC<BookContainerProps> = ({
   onShowCover,
 }) => {
   const [showAffirmation, setShowAffirmation] = useState(false);
+  const { isInstalled } = usePWAInstall();
 
   return (
     <div className="min-h-screen py-4 sm:py-8 px-2 sm:px-6 flex flex-col items-center justify-start select-text">
@@ -93,17 +94,20 @@ export const BookContainer: React.FC<BookContainerProps> = ({
             </button>
           )}
 
-          <PWAInstallButton />
+          {/* Only shown in browser before installing to computer */}
+          {!isInstalled && <PWAInstallButton />}
 
-          {/* Backup to file button */}
-          <button
-            onClick={openBackupModal}
-            className="p-1.5 px-2 rounded-xl bg-pink-100/60 hover:bg-pink-100 text-pink-900 text-xs font-medium transition cursor-pointer flex items-center gap-1 border border-pink-200/60"
-            title="Backup to local file / Restore"
-          >
-            <HardDrive className="w-3.5 h-3.5 text-pink-700" />
-            <span className="hidden md:inline">Backup</span>
-          </button>
+          {/* Backup to file button - hidden on installed desktop app as requested */}
+          {!isInstalled && (
+            <button
+              onClick={openBackupModal}
+              className="p-1.5 px-2 rounded-xl bg-pink-100/60 hover:bg-pink-100 text-pink-900 text-xs font-medium transition cursor-pointer flex items-center gap-1 border border-pink-200/60"
+              title="Backup to local file / Restore"
+            >
+              <HardDrive className="w-3.5 h-3.5 text-pink-700" />
+              <span className="hidden md:inline">Backup</span>
+            </button>
+          )}
 
           {/* Print button */}
           <button
@@ -161,7 +165,7 @@ export const BookContainer: React.FC<BookContainerProps> = ({
           </div>
 
           {/* INNER PAGES (Blush cream paper journal spread) */}
-          <div className="relative rounded-2xl bg-[#fffbfc] shadow-inner p-4 sm:p-6 min-h-[580px] overflow-hidden border border-pink-200/70">
+          <div className="relative rounded-2xl bg-[#fffbfc] shadow-inner p-4 sm:p-6 min-h-[580px] overflow-visible border border-pink-200/70">
             
             {/* Center Spine Crease */}
             <div className="pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2 w-8 sm:w-12 bg-gradient-to-r from-transparent via-pink-900/[0.03] to-transparent hidden md:block" />
