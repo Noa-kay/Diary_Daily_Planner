@@ -11,6 +11,7 @@
 - **📖 3D Book Experience:** Open-book desk layout with spiral binding, ribbon bookmark, tabbed navigation, and pastel desk textures.
 - **📅 Monthly Calendar Spread:** Full interactive monthly calendar featuring both Gregorian dates and Hebrew dates (including Jewish holidays and Rosh Chodesh) powered by `@hebcal/core`.
 - **✍️ Today's Page (Daily Spread):**
+  - **⭐ Important Events & Occasions:** Dedicated section to record key dates, birthdays, appointments, and meetings that automatically sync and display inside the day's square in the **Monthly Calendar**.
   - **Today's Priorities:** Top 3 focus goals for the day.
   - **To-Do List:** Checklist with celebratory confetti upon completing all tasks.
   - **Hourly Time-Block Schedule:** 06:00 to 22:00 timeline planner.

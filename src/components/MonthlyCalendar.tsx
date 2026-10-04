@@ -232,6 +232,7 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
             const dayTasks = tasks.filter((t) => t.date === cell.key);
             const completedCount = dayTasks.filter((t) => t.completed).length;
             const hasIdeas = ideas.some((i) => i.date === cell.key);
+            const dayEvents = dayLogs[cell.key]?.importantEvents || [];
             const cycleLog = cycleLogs[cell.key];
             const isPeriod = cycleLog?.isPeriod;
 
@@ -301,6 +302,21 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
 
                 {/* Indicators inside the cell */}
                 <div className="mt-1 space-y-1">
+                  {dayEvents.length > 0 && (
+                    <div className="space-y-0.5">
+                      {dayEvents.slice(0, 2).map((evt, idx) => (
+                        <div
+                          key={idx}
+                          title={evt}
+                          className="flex items-center gap-1 text-[9.5px] px-1 py-0.5 rounded-md font-semibold bg-rose-100 text-rose-900 border border-rose-200 truncate"
+                        >
+                          <span className="shrink-0 text-[10px]">⭐</span>
+                          <span className="truncate">{evt}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   {dayTasks.length > 0 && (
                     <div className="flex items-center gap-1 text-[10px] text-stone-600 font-medium truncate">
                       <span

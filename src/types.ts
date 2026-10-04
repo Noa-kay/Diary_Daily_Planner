@@ -88,6 +88,7 @@ export interface DayLog {
   topPriorities?: [string, string, string];
   dailyNote?: string;
   dailyThoughts?: string;
+  importantEvents?: string[]; // Events that show on the monthly calendar square
   mood?: MoodType;
   energyLevel?: number; // 1 to 5 stars/hearts
   meals?: {

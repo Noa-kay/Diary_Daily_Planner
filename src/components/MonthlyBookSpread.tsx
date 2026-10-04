@@ -194,6 +194,10 @@ export const MonthlyBookSpread: React.FC<MonthlyBookSpreadProps> = ({
           </button>
 
           <div className="hidden lg:flex items-center gap-3 text-[11px] text-pink-900/80 border-l border-pink-200 pl-3">
+            <span className="flex items-center gap-1 font-medium text-rose-950">
+              <span className="text-xs">⭐</span>
+              Events
+            </span>
             <span className="flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-pink-400" />
               Tasks
@@ -236,6 +240,7 @@ export const MonthlyBookSpread: React.FC<MonthlyBookSpreadProps> = ({
           const completedCount = dayTasks.filter((t) => t.completed).length;
           const dayIdeas = ideas.filter((i) => i.date === cell.key);
           const hasIdeas = dayIdeas.length > 0;
+          const dayEvents = dayLogs[cell.key]?.importantEvents || [];
           const cycleLog = cycleLogs[cell.key];
           const isFlower = cycleLog?.isPeriod;
 
@@ -302,8 +307,29 @@ export const MonthlyBookSpread: React.FC<MonthlyBookSpreadProps> = ({
                 )}
               </div>
 
-              {/* Middle & Bottom: Task & Mood Indicators inside the day */}
+              {/* Middle & Bottom: Events, Tasks & Mood Indicators inside the day */}
               <div className="mt-1 space-y-1 w-full">
+                {/* Important Events Badges (Prominently displayed) */}
+                {dayEvents.length > 0 && (
+                  <div className="space-y-0.5 w-full">
+                    {dayEvents.slice(0, 2).map((evt, idx) => (
+                      <div
+                        key={idx}
+                        title={evt}
+                        className="flex items-center gap-1 text-[9.5px] px-1.5 py-0.5 rounded-md font-semibold bg-gradient-to-r from-rose-200/90 to-pink-200/80 text-rose-950 border border-rose-300 shadow-2xs truncate leading-tight"
+                      >
+                        <span className="shrink-0 text-[10px]">⭐</span>
+                        <span className="truncate">{evt}</span>
+                      </div>
+                    ))}
+                    {dayEvents.length > 2 && (
+                      <span className="text-[8.5px] text-rose-700 font-bold block text-right px-1 leading-none">
+                        +{dayEvents.length - 2} more
+                      </span>
+                    )}
+                  </div>
+                )}
+
                 {/* Tasks pill */}
                 {dayTasks.length > 0 && (
                   <div
