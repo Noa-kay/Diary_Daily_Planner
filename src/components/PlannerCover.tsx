@@ -1,17 +1,90 @@
-import React, { useState } from 'react';
-import { Sparkles, Heart } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Lock, Unlock, Sparkles, Delete, KeyRound } from 'lucide-react';
+import { playGentleChime } from '../services/soundService';
 
 interface PlannerCoverProps {
+  isLocked?: boolean;
+  currentPin?: string;
+  onUnlock?: () => void;
   onOpen: () => void;
   userDisplayName?: string;
 }
 
-export const PlannerCover: React.FC<PlannerCoverProps> = ({ onOpen, userDisplayName = 'My Planner' }) => {
+export const PlannerCover: React.FC<PlannerCoverProps> = ({
+  isLocked = true,
+  currentPin,
+  onUnlock,
+  onOpen,
+  userDisplayName = 'My Daily Planner',
+}) => {
   const [isOpening, setIsOpening] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [error, setError] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
 
-  const handleOpenClick = () => {
+  // Default to 1234 if no custom PIN has been configured yet
+  const targetPin = currentPin || '1234';
+
+  const handleDigit = (digit: string) => {
+    if (isOpening || isSuccess) return;
+
+    if (pinInput.length < 4) {
+      const next = pinInput + digit;
+      setPinInput(next);
+      setError(false);
+
+      if (next.length === 4) {
+        if (next === targetPin) {
+          setIsSuccess(true);
+          playGentleChime();
+          setTimeout(() => {
+            setIsOpening(true);
+            setTimeout(() => {
+              onUnlock?.();
+              onOpen();
+            }, 450);
+          }, 250);
+        } else {
+          setError(true);
+          setTimeout(() => {
+            setPinInput('');
+            setError(false);
+          }, 650);
+        }
+      }
+    }
+  };
+
+  const handleDelete = () => {
+    if (isOpening || isSuccess) return;
+    setPinInput((prev) => prev.slice(0, -1));
+    setError(false);
+  };
+
+  // Keyboard support for typing PIN directly on desktop keyboard
+  useEffect(() => {
+    if (isOpening || isSuccess) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) return;
+
+      if (e.key >= '0' && e.key <= '9') {
+        e.preventDefault();
+        handleDigit(e.key);
+      } else if (e.key === 'Backspace' || e.key === 'Delete') {
+        e.preventDefault();
+        handleDelete();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [pinInput, targetPin, isOpening, isSuccess]);
+
+  const handleOpenDirect = () => {
     setIsOpening(true);
     setTimeout(() => {
+      onUnlock?.();
       onOpen();
     }, 450);
   };
@@ -19,19 +92,17 @@ export const PlannerCover: React.FC<PlannerCoverProps> = ({ onOpen, userDisplayN
   return (
     <div
       style={{ perspective: '1200px' }}
-      className="relative max-w-md w-full mx-auto my-6 sm:my-10"
+      className="relative max-w-md w-full mx-auto my-4 sm:my-6 select-none font-sans"
     >
       {/* 3D Swing Book Cover */}
       <div
-        onClick={handleOpenClick}
         style={{
           transformOrigin: 'left center',
           transform: isOpening ? 'rotateY(75deg) scale(0.96)' : 'rotateY(0deg)',
           opacity: isOpening ? 0.3 : 1,
           transition: 'all 500ms cubic-bezier(0.4, 0, 0.2, 1)',
         }}
-        className="relative rounded-[36px] p-6 sm:p-8 bg-gradient-to-br from-[#fde8ef] via-[#fcd5e2] to-[#f9bcd0] shadow-2xl border-4 border-white/80 ring-1 ring-pink-300/60 overflow-hidden cursor-pointer group"
-        title="Tap to open your planner ✨"
+        className="relative rounded-[36px] p-5 sm:p-7 bg-gradient-to-br from-[#fde8ef] via-[#fcd5e2] to-[#f9bcd0] shadow-2xl border-4 border-white/80 ring-1 ring-pink-300/60 overflow-hidden"
       >
         {/* Subtle decorative flowers & bows floating in background */}
         <div className="absolute top-4 right-4 text-pink-300/60 text-2xl select-none">🌸</div>
@@ -51,47 +122,142 @@ export const PlannerCover: React.FC<PlannerCoverProps> = ({ onOpen, userDisplayN
           ))}
         </div>
 
-        {/* Central Scalloped Label */}
-        <div className="relative bg-white/95 rounded-[28px] p-6 sm:p-8 shadow-md border-2 border-pink-200/90 text-center flex flex-col items-center justify-center my-4 ml-3 group-hover:scale-[1.01] transition-transform">
+        {/* Central Scalloped Label with Integrated Diary Lock (100% ENGLISH ONLY) */}
+        <div className="relative bg-white/95 rounded-[28px] p-5 sm:p-7 shadow-md border-2 border-pink-200/90 text-center flex flex-col items-center justify-center my-2 ml-3">
           
-          {/* Top Bow Ribbon */}
-          <div className="text-3xl sm:text-4xl mb-2 animate-bounce duration-1000">
-            🎀
+          {/* Header Icon: Luxury Golden Padlock Medallion */}
+          <div className="relative mb-2">
+            <div
+              className={`w-13 h-13 rounded-full flex items-center justify-center shadow-md transition-all duration-300 ${
+                isSuccess
+                  ? 'bg-emerald-500 text-white shadow-emerald-300/50 scale-110'
+                  : error
+                  ? 'bg-rose-500 text-white shadow-rose-300/50 animate-shake'
+                  : 'bg-gradient-to-tr from-amber-400 via-amber-300 to-amber-500 text-white ring-4 ring-amber-100'
+              }`}
+            >
+              {isSuccess ? (
+                <Unlock className="w-6 h-6 animate-pulse" />
+              ) : (
+                <Lock className="w-6 h-6" />
+              )}
+            </div>
+            <span className="absolute -top-1 -right-1 text-xs">✨</span>
           </div>
 
-          <div className="text-[11px] uppercase tracking-widest text-pink-500 font-semibold mb-1">
-            DAILY 💖 PLANNER
-          </div>
-
-          <h1 className="text-2xl sm:text-3xl font-medium text-pink-950 tracking-tight mb-2">
-            {!userDisplayName || userDisplayName === 'יומני' || userDisplayName === 'יומני המלכותי'
+          <h1 className="text-xl sm:text-2xl font-serif font-bold text-pink-950 tracking-tight mb-1">
+            {!userDisplayName || userDisplayName.includes('יומן')
               ? 'My Daily Planner'
               : userDisplayName}
           </h1>
 
-          <div className="w-12 h-0.5 bg-gradient-to-r from-transparent via-pink-400 to-transparent my-2" />
+          <div className="w-12 h-0.5 bg-gradient-to-r from-transparent via-pink-400 to-transparent my-1.5" />
 
-          <p className="text-sm font-script text-pink-700 tracking-wide mb-4">
-            Big dreams • Little steps • Beautiful progress
-          </p>
+          {/* INTEGRATED ORDERLY COMBINATION DIARY LOCK (100% ENGLISH ONLY) */}
+          <div className="w-full max-w-[260px] flex flex-col items-center mt-0.5">
+            <p className="text-xs text-pink-800/80 mb-2 font-medium">
+              Enter your 4-digit PIN to unlock
+            </p>
 
-          <p className="text-[11px] text-pink-600/80 max-w-xs leading-relaxed mb-6 font-normal">
-            Personal diary, daily schedule, tasks, reflections & wellness 🌸
-          </p>
+            {/* 4 Luxury Lock Tumblers (Digit Display) */}
+            <div className="flex justify-center gap-2.5 mb-2">
+              {[0, 1, 2, 3].map((idx) => {
+                const hasDigit = pinInput.length > idx;
+                const isCurrent = pinInput.length === idx;
+                return (
+                  <div
+                    key={idx}
+                    className={`w-9 h-11 rounded-xl flex items-center justify-center font-serif text-base font-bold transition-all duration-200 border ${
+                      error
+                        ? 'bg-rose-50 border-rose-400 text-rose-600 scale-105 animate-shake'
+                        : isSuccess
+                        ? 'bg-emerald-50 border-emerald-400 text-emerald-600 scale-110 shadow-sm'
+                        : hasDigit
+                        ? 'bg-pink-100/90 border-pink-400 text-pink-700 shadow-2xs scale-105'
+                        : isCurrent
+                        ? 'bg-white border-pink-300 ring-2 ring-pink-300/50 shadow-xs'
+                        : 'bg-white/70 border-pink-200 text-pink-300'
+                    }`}
+                  >
+                    {hasDigit ? (
+                      <span className="text-pink-600 font-serif leading-none select-none">
+                        ✦
+                      </span>
+                    ) : (
+                      <span className="text-pink-300/60 text-xs font-mono leading-none select-none">
+                        •
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
 
-          {/* Open Button with delicate glow */}
-          <button
-            type="button"
-            className="group relative px-6 py-2.5 rounded-full bg-gradient-to-r from-pink-500 via-rose-400 to-pink-500 hover:from-pink-600 hover:to-rose-500 text-white text-xs font-semibold shadow-md shadow-pink-400/30 hover:shadow-lg hover:scale-105 transition-all duration-200 cursor-pointer flex items-center gap-2"
-          >
-            <span>Open Planner</span>
-            <span className="text-sm group-hover:rotate-12 transition-transform">✨</span>
-          </button>
+            {/* Status / Feedback message */}
+            <div className="h-5 mb-1.5 flex items-center justify-center">
+              {error ? (
+                <span className="text-[11px] text-rose-600 font-bold animate-shake">
+                  Incorrect PIN, please try again 🔐
+                </span>
+              ) : isSuccess ? (
+                <span className="text-[11px] text-emerald-600 font-bold">
+                  Unlocked! Opening planner... 🌸
+                </span>
+              ) : (
+                <span className="text-[10px] text-stone-500">
+                  Type with keypad or keyboard
+                </span>
+              )}
+            </div>
+
+            {/* Unified, Orderly Keypad Panel */}
+            <div className="w-full rounded-2xl bg-white/95 border border-pink-200/90 p-2 shadow-xs grid grid-cols-3 gap-1.5">
+              {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
+                <button
+                  key={digit}
+                  type="button"
+                  onClick={() => handleDigit(digit)}
+                  className="h-10 rounded-xl bg-pink-50/50 hover:bg-pink-100 active:bg-pink-200 text-pink-950 font-serif font-semibold text-sm transition-all duration-150 flex items-center justify-center shadow-2xs border border-pink-100/80 hover:border-pink-300 active:scale-95 cursor-pointer"
+                >
+                  {digit}
+                </button>
+              ))}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setPinInput('');
+                  setError(false);
+                }}
+                className="h-10 rounded-xl bg-stone-50 hover:bg-stone-100 active:bg-stone-200 text-stone-600 font-serif text-xs font-medium transition-all active:scale-95 flex items-center justify-center border border-stone-200/60 cursor-pointer"
+                title="Clear all digits"
+              >
+                Clear
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleDigit('0')}
+                className="h-10 rounded-xl bg-pink-50/50 hover:bg-pink-100 active:bg-pink-200 text-pink-950 font-serif font-semibold text-sm transition-all duration-150 flex items-center justify-center shadow-2xs border border-pink-100/80 hover:border-pink-300 active:scale-95 cursor-pointer"
+              >
+                0
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="h-10 rounded-xl bg-rose-50/70 hover:bg-rose-100 active:bg-rose-200 text-rose-700 transition-all active:scale-95 flex items-center justify-center border border-rose-200/60 cursor-pointer"
+                title="Delete last digit"
+              >
+                <Delete className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
         </div>
 
-        {/* Bottom subtle quote */}
-        <div className="text-center mt-3 text-[11px] text-pink-800/70 font-medium">
-          🌸 100% Private, stored locally on your device
+        {/* Bottom subtle quote (ENGLISH ONLY) */}
+        <div className="text-center mt-2.5 text-[11px] text-pink-800/70 font-medium">
+          🌸 100% Private • Stored locally on your device
         </div>
       </div>
     </div>

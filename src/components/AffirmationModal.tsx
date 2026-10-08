@@ -1,54 +1,21 @@
 import React, { useState } from 'react';
-import { Sparkles, X, Heart, RefreshCw, Share2 } from 'lucide-react';
+import { Sparkles, X, RefreshCw } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { AFFIRMATIONS_COLLECTION } from '../services/affirmations';
 
 interface AffirmationModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialIndex?: number;
 }
 
-const AFFIRMATIONS = [
-  {
-    quote: "You are allowed to take up space, speak your truth, and live life at your own gentle pace.",
-    theme: "Self-Worth 🌸",
-  },
-  {
-    quote: "Small, consistent steps lead to breathtaking destinations. Be patient with your blooming.",
-    theme: "Progress & Dreams ✨",
-  },
-  {
-    quote: "Breathe in calm, exhale worry. You have handled hard days before, and today is full of grace.",
-    theme: "Inner Peace 🕊️",
-  },
-  {
-    quote: "Your body is a sanctuary that works tirelessly for you. Treat it with immense love and gratitude.",
-    theme: "Body Love 💖",
-  },
-  {
-    quote: "You do not need to prove your worth to anyone. Being authentically yourself is your superpower.",
-    theme: "Authenticity 🎀",
-  },
-  {
-    quote: "Celebrate how far you have come. The courage it took to get here is worthy of celebration.",
-    theme: "Celebration 🌷",
-  },
-  {
-    quote: "Give yourself permission to rest. Rest is not a reward; it is an essential part of life.",
-    theme: "Gentle Rest ☕",
-  },
-  {
-    quote: "Trust the timing of your life. What is meant for you will not pass you by.",
-    theme: "Trust & Hope ☁️",
-  },
-];
-
-export const AffirmationModal: React.FC<AffirmationModalProps> = ({ isOpen, onClose }) => {
-  const [index, setIndex] = useState(0);
+export const AffirmationModal: React.FC<AffirmationModalProps> = ({ isOpen, onClose, initialIndex = 0 }) => {
+  const [index, setIndex] = useState(initialIndex);
 
   if (!isOpen) return null;
 
   const handleNext = () => {
-    setIndex((prev) => (prev + 1) % AFFIRMATIONS.length);
+    setIndex((prev) => (prev + 1) % AFFIRMATIONS_COLLECTION.length);
     confetti({
       particleCount: 25,
       spread: 45,
@@ -57,7 +24,7 @@ export const AffirmationModal: React.FC<AffirmationModalProps> = ({ isOpen, onCl
     });
   };
 
-  const current = AFFIRMATIONS[index];
+  const current = AFFIRMATIONS_COLLECTION[index % AFFIRMATIONS_COLLECTION.length];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-200">

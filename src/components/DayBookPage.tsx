@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import { 
   ArrowRight, 
@@ -20,7 +20,12 @@ import {
   Star,
   Pencil,
   Check,
-  Calendar as CalendarIcon
+  Calendar as CalendarIcon,
+  RefreshCw,
+  MessageSquareQuote,
+  Zap,
+  Flame,
+  Volume2
 } from 'lucide-react';
 import { 
   Task, 
@@ -32,10 +37,52 @@ import {
   FlowLevel, 
   CycleSymptom, 
   MoodType, 
-  AppSettings 
+  AppSettings,
+  EventRecurrence,
+  DailyWitItem,
+  MiddayCheckIn
 } from '../types';
-import { formatDateKey, parseDateKey, calculateCyclePrediction } from '../services/storage';
+import { 
+  formatDateKey, 
+  parseDateKey, 
+  calculateCyclePrediction, 
+  parseEventItem,
+  formatEventItem,
+  getEventsForDate,
+  DayEventItem
+} from '../services/storage';
 import { getHebrewDateInfo } from '../services/hebrewCalendar';
+
+export const EVENT_ICON_CATEGORIES: { name: string; icons: string[] }[] = [
+  {
+    name: 'Celebrations & Events',
+    icons: ['🎂', '🎉', '🎁', '🥳', '💍', '🥂', '🎈', '👑', '🎀'],
+  },
+  {
+    name: 'Health & Wellness',
+    icons: ['🦷', '🩺', '🏥', '💊', '🧘‍♀️', '💆‍♀️', '💅', '💇‍♀️', '🩹'],
+  },
+  {
+    name: 'Travel & Trips',
+    icons: ['✈️', '🚗', '🚆', '🏖️', '🏨', '🏕️', '🧳', '🗺️', '⛽'],
+  },
+  {
+    name: 'Work & Study',
+    icons: ['💼', '💻', '📚', '🎓', '📝', '💡', '🏛️', '📌', '📊'],
+  },
+  {
+    name: 'Food & Leisure',
+    icons: ['☕', '🍽️', '🍕', '🍷', '🍰', '🍦', '🎬', '🍿', '🎵'],
+  },
+  {
+    name: 'Life & Home',
+    icons: ['🌸', '⭐', '💖', '🛍️', '🏃‍♀️', '🏠', '🐾', '💌', '🔔'],
+  },
+];
+
+export const ALL_EVENT_ICONS = Array.from(
+  new Set(EVENT_ICON_CATEGORIES.flatMap((c) => c.icons))
+);
 
 interface DayBookPageProps {
   selectedDate: string;
@@ -47,12 +94,14 @@ interface DayBookPageProps {
   onDeleteTask: (taskId: string) => void;
   onCarryOverTasks: (fromDate: string, toDate: string) => void;
   dayLog?: DayLog;
+  allDayLogs?: Record<string, DayLog>;
   onUpdateDayLog: (date: string, partial: Partial<DayLog>) => void;
   cycleLog?: CycleDayLog;
   onUpdateCycleLog: (date: string, partial: Partial<CycleDayLog>) => void;
   allCycleLogs: Record<string, CycleDayLog>;
   habits: Habit[];
   settings: AppSettings;
+  onOpenJokesDigest?: () => void;
 }
 
 const MOODS: { type: MoodType; label: string; emoji: string }[] = [
@@ -70,15 +119,15 @@ const FLOW_LEVELS: { id: FlowLevel; label: string; icon: string }[] = [
   { id: 'heavy', label: 'Heavy', icon: '💧💧💧' },
 ];
 
-const SYMPTOMS: { id: CycleSymptom; label: string }[] = [
-  { id: 'התכווצויות', label: 'Cramps' },
-  { id: 'כאב ראש', label: 'Headache' },
-  { id: 'עייפות', label: 'Fatigue' },
-  { id: 'נפיחות', label: 'Bloating' },
-  { id: 'רגישות בחזה', label: 'Tender' },
-  { id: 'כאבי גב', label: 'Backache' },
-  { id: 'מצב רוח תנודתי', label: 'Mood' },
-  { id: 'חשקים למתוק', label: 'Cravings' },
+const SYMPTOMS: { id: CycleSymptom; legacyId?: string; label: string }[] = [
+  { id: 'Cramps', legacyId: 'התכווצויות', label: 'Cramps' },
+  { id: 'Headache', legacyId: 'כאב ראש', label: 'Headache' },
+  { id: 'Fatigue', legacyId: 'עייפות', label: 'Fatigue' },
+  { id: 'Bloating', legacyId: 'נפיחות', label: 'Bloating' },
+  { id: 'Tender', legacyId: 'רגישות בחזה', label: 'Tender' },
+  { id: 'Backache', legacyId: 'כאבי גב', label: 'Backache' },
+  { id: 'Mood Swings', legacyId: 'מצב רוח תנודתי', label: 'Mood' },
+  { id: 'Cravings', legacyId: 'חשקים למתוק', label: 'Cravings' },
 ];
 
 const DEFAULT_SELF_CARE = [
@@ -91,6 +140,7 @@ const DEFAULT_SELF_CARE = [
 ];
 
 const SCHEDULE_TIMES = [
+  '6 AM',
   '7 AM',
   '8 AM',
   '9 AM',
@@ -107,6 +157,8 @@ const SCHEDULE_TIMES = [
   '8 PM',
   '9 PM',
   '10 PM',
+  '11 PM',
+  '12 AM',
 ];
 
 export const DayBookPage: React.FC<DayBookPageProps> = ({
@@ -119,12 +171,14 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
   onDeleteTask,
   onCarryOverTasks,
   dayLog,
+  allDayLogs,
   onUpdateDayLog,
   cycleLog,
   onUpdateCycleLog,
   allCycleLogs,
   habits,
   settings,
+  onOpenJokesDigest,
 }) => {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [isAddingTask, setIsAddingTask] = useState(false);
@@ -168,7 +222,7 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
       title: newTaskTitle.trim(),
       completed: false,
       priority: 'medium',
-      category: 'אישי',
+      category: 'Personal',
     });
 
     setNewTaskTitle('');
@@ -222,47 +276,113 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
 
   // Important Events for Monthly Calendar
   const importantEvents = dayLog?.importantEvents || [];
+  const allEventsForThisDay: DayEventItem[] = getEventsForDate(
+    selectedDate,
+    allDayLogs || (dayLog ? { [selectedDate]: dayLog } : {})
+  );
+
   const [newEventText, setNewEventText] = useState('');
+  const [selectedEventIcon, setSelectedEventIcon] = useState<string>('🎂');
+  const [newEventRecurrence, setNewEventRecurrence] = useState<EventRecurrence>('none');
+  const [isIconPickerOpen, setIsIconPickerOpen] = useState(false);
+  const [isRecurrencePickerOpen, setIsRecurrencePickerOpen] = useState(false);
+  const [quickChangeIndex, setQuickChangeIndex] = useState<number | null>(null);
+
   const [editingEventIndex, setEditingEventIndex] = useState<number | null>(null);
   const [editingEventText, setEditingEventText] = useState('');
+  const [editingEventIcon, setEditingEventIcon] = useState<string>('🎂');
+  const [editingEventRecurrence, setEditingEventRecurrence] = useState<EventRecurrence>('none');
+  const [editingPickerOpen, setEditingPickerOpen] = useState(false);
+  const [editingRecurrencePickerOpen, setEditingRecurrencePickerOpen] = useState(false);
 
   const handleAddEvent = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const trimmed = newEventText.trim();
     if (!trimmed) return;
-    const updated = [...importantEvents, trimmed];
+    const parsed = parseEventItem(trimmed);
+    const iconToUse = parsed.icon !== '✦' ? parsed.icon : selectedEventIcon;
+    const titleToUse = parsed.title || trimmed;
+    const recurrenceToUse = newEventRecurrence !== 'none' ? newEventRecurrence : parsed.recurrence;
+    const finalEvent = formatEventItem(iconToUse, titleToUse, recurrenceToUse, selectedDate);
+    const updated = [...importantEvents, finalEvent];
     onUpdateDayLog(selectedDate, { importantEvents: updated });
     setNewEventText('');
+    setNewEventRecurrence('none');
+    setIsIconPickerOpen(false);
+    setIsRecurrencePickerOpen(false);
   };
 
-  const handleStartEditEvent = (idx: number, currentText: string) => {
+  const handleUpdateEventIcon = (item: DayEventItem, newIcon: string) => {
+    const targetDateForEdit = item.originalDate || selectedDate;
+    const formatted = formatEventItem(
+      newIcon,
+      item.parsed.title,
+      item.parsed.recurrence,
+      targetDateForEdit
+    );
+    const sourceLogEvents =
+      (allDayLogs && allDayLogs[targetDateForEdit]?.importantEvents) ||
+      (targetDateForEdit === selectedDate ? importantEvents : []);
+    const updated = sourceLogEvents.map((e) => (e === item.evt ? formatted : e));
+    onUpdateDayLog(targetDateForEdit, { importantEvents: updated });
+    setQuickChangeIndex(null);
+  };
+
+  const handleStartEditEvent = (idx: number, item: DayEventItem) => {
     setEditingEventIndex(idx);
-    setEditingEventText(currentText);
+    setEditingEventIcon(item.parsed.icon !== '✦' ? item.parsed.icon : '🎂');
+    setEditingEventText(item.parsed.title);
+    setEditingEventRecurrence(item.parsed.recurrence);
+    setEditingPickerOpen(false);
+    setEditingRecurrencePickerOpen(false);
+    setQuickChangeIndex(null);
   };
 
-  const handleSaveEditEvent = (idx: number) => {
+  const handleSaveEditEvent = (item: DayEventItem) => {
     const trimmed = editingEventText.trim();
+    const targetDateForEdit = item.originalDate || selectedDate;
     if (!trimmed) {
-      handleRemoveEvent(idx);
+      handleRemoveEvent(item);
     } else {
-      const updated = [...importantEvents];
-      updated[idx] = trimmed;
-      onUpdateDayLog(selectedDate, { importantEvents: updated });
+      const formatted = formatEventItem(
+        editingEventIcon,
+        trimmed,
+        editingEventRecurrence,
+        targetDateForEdit
+      );
+      const sourceLogEvents =
+        (allDayLogs && allDayLogs[targetDateForEdit]?.importantEvents) ||
+        (targetDateForEdit === selectedDate ? importantEvents : []);
+      const updated = sourceLogEvents.map((e) => (e === item.evt ? formatted : e));
+      onUpdateDayLog(targetDateForEdit, { importantEvents: updated });
     }
     setEditingEventIndex(null);
     setEditingEventText('');
+    setEditingPickerOpen(false);
+    setEditingRecurrencePickerOpen(false);
   };
 
   const handleCancelEditEvent = () => {
     setEditingEventIndex(null);
     setEditingEventText('');
+    setEditingPickerOpen(false);
+    setEditingRecurrencePickerOpen(false);
   };
 
-  const handleRemoveEvent = (indexToRemove: number) => {
-    const updated = importantEvents.filter((_, idx) => idx !== indexToRemove);
-    onUpdateDayLog(selectedDate, { importantEvents: updated });
-    if (editingEventIndex === indexToRemove) {
+  const handleRemoveEvent = (item: DayEventItem) => {
+    const targetDateForRemoval = item.originalDate || selectedDate;
+    const sourceLogEvents =
+      (allDayLogs && allDayLogs[targetDateForRemoval]?.importantEvents) ||
+      (targetDateForRemoval === selectedDate ? importantEvents : []);
+    const updated = sourceLogEvents.filter((e) => e !== item.evt);
+    onUpdateDayLog(targetDateForRemoval, { importantEvents: updated });
+    if (editingEventIndex !== null) {
       setEditingEventIndex(null);
+      setEditingPickerOpen(false);
+      setEditingRecurrencePickerOpen(false);
+    }
+    if (quickChangeIndex !== null) {
+      setQuickChangeIndex(null);
     }
   };
 
@@ -300,6 +420,120 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
         water: index === waterCount ? index - 1 : index,
       },
     });
+  };
+
+  // ── MIDDAY PULSE & MOOD PIVOT ──
+  const middayCheckIn = dayLog?.middayCheckIn;
+  const [isEditingMidday, setIsEditingMidday] = useState(!middayCheckIn?.completed);
+  const [middayMoodShift, setMiddayMoodShift] = useState(middayCheckIn?.moodShift || '');
+  const [middayCraving, setMiddayCraving] = useState(middayCheckIn?.cravingOrDesire || '');
+  const [middayIntention, setMiddayIntention] = useState(middayCheckIn?.afternoonIntention || '');
+
+  // Keep state synced with dayLog when date changes
+  useEffect(() => {
+    const checkIn = dayLog?.middayCheckIn;
+    setMiddayMoodShift(checkIn?.moodShift || '');
+    setMiddayCraving(checkIn?.cravingOrDesire || '');
+    setMiddayIntention(checkIn?.afternoonIntention || '');
+    setIsEditingMidday(!checkIn?.completed);
+  }, [selectedDate, dayLog?.middayCheckIn]);
+
+  const handleSaveMiddayPulse = (e: React.FormEvent) => {
+    e.preventDefault();
+    onUpdateDayLog(selectedDate, {
+      middayCheckIn: {
+        timestamp: Date.now(),
+        moodShift: middayMoodShift || 'Peaceful & Grounded',
+        cravingOrDesire: middayCraving,
+        afternoonIntention: middayIntention,
+        completed: true,
+      },
+    });
+    setIsEditingMidday(false);
+    confetti({
+      particleCount: 25,
+      spread: 45,
+      origin: { y: 0.7 },
+      colors: ['#fbbf24', '#f472b6', '#38bdf8'],
+    });
+  };
+
+  // ── DAILY WIT, JOKES & IDIOMS (Multiple items support) ──
+  const witItems: DailyWitItem[] = dayLog?.witItems || [];
+  const [isAddingWit, setIsAddingWit] = useState(false);
+  const [witType, setWitType] = useState<'joke' | 'idiom' | 'quote' | 'witticism'>('joke');
+  const [witText, setWitText] = useState('');
+  const [witPunchline, setWitPunchline] = useState('');
+  const [editingWitId, setEditingWitId] = useState<string | null>(null);
+
+  const handleSaveWit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!witText.trim()) return;
+
+    const currentWits = dayLog?.witItems || [];
+    if (editingWitId) {
+      const updated = currentWits.map((w) =>
+        w.id === editingWitId
+          ? {
+              ...w,
+              type: witType,
+              text: witText.trim(),
+              meaningOrPunchline: witPunchline.trim(),
+            }
+          : w
+      );
+      onUpdateDayLog(selectedDate, { witItems: updated });
+    } else {
+      const newItem: DailyWitItem = {
+        id: `wit-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        type: witType,
+        text: witText.trim(),
+        meaningOrPunchline: witPunchline.trim(),
+        createdAt: Date.now(),
+      };
+      onUpdateDayLog(selectedDate, { witItems: [...currentWits, newItem] });
+      confetti({
+        particleCount: 25,
+        spread: 45,
+        origin: { y: 0.8 },
+        colors: ['#fbbf24', '#f472b6', '#a78bfa'],
+      });
+    }
+
+    setWitText('');
+    setWitPunchline('');
+    setEditingWitId(null);
+    setIsAddingWit(false);
+  };
+
+  const handleDeleteWit = (id: string) => {
+    const currentWits = dayLog?.witItems || [];
+    onUpdateDayLog(selectedDate, { witItems: currentWits.filter((w) => w.id !== id) });
+  };
+
+  const handleStartEditWit = (item: DailyWitItem) => {
+    setEditingWitId(item.id);
+    setWitType(item.type);
+    setWitText(item.text);
+    setWitPunchline(item.meaningOrPunchline || '');
+    setIsAddingWit(true);
+  };
+
+  const CURATED_WIT_SPARKS = [
+    { type: 'joke' as const, text: "Why don't eggs tell jokes?", punchline: "Because they'd crack each other up! 🥚😂" },
+    { type: 'joke' as const, text: "What do you call a sleeping dinosaur?", punchline: "A dino-snore! 💤" },
+    { type: 'idiom' as const, text: "Every cloud has a silver lining", punchline: "There is always something comforting or promising in every situation." },
+    { type: 'idiom' as const, text: "Piece of cake", punchline: "Something wonderfully simple and sweet to accomplish." },
+    { type: 'quote' as const, text: "A day without laughter is a day wasted.", punchline: "Charlie Chaplin" },
+    { type: 'witticism' as const, text: "Coffee: because adulting is hard without liquid optimism ☕", punchline: "Morning truth" },
+    { type: 'idiom' as const, text: "Spill the tea", punchline: "Share the friendly scoop with a warm smile ☕" },
+  ];
+
+  const handlePickCuratedWit = (spark: typeof CURATED_WIT_SPARKS[0]) => {
+    setWitType(spark.type);
+    setWitText(spark.text);
+    setWitPunchline(spark.punchline);
+    setIsAddingWit(true);
   };
 
   return (
@@ -389,9 +623,9 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
             <div>
               <h3 className="text-xs sm:text-sm font-serif font-bold text-pink-950 uppercase tracking-wider flex items-center gap-1.5">
                 <span>Important Events & Occasions</span>
-                {importantEvents.length > 0 && (
+                {allEventsForThisDay.length > 0 && (
                   <span className="text-[10px] font-sans font-medium text-pink-600 bg-pink-100/80 px-2 py-0.5 rounded-full border border-pink-200">
-                    {importantEvents.length}
+                    {allEventsForThisDay.length}
                   </span>
                 )}
               </h3>
@@ -405,17 +639,125 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
         </div>
 
         {/* Existing Events List */}
-        {importantEvents.length > 0 ? (
+        {allEventsForThisDay.length > 0 ? (
           <div className="flex flex-wrap items-center gap-2 mb-3">
-            {importantEvents.map((evt, idx) => {
+            {allEventsForThisDay.map((item, idx) => {
+              const { parsed } = item;
               const isEditing = editingEventIndex === idx;
 
               if (isEditing) {
                 return (
                   <div
                     key={idx}
-                    className="inline-flex items-center gap-1.5 p-1 bg-white rounded-xl border-2 border-pink-400 shadow-xs"
+                    className="inline-flex flex-wrap items-center gap-1.5 p-1.5 bg-white rounded-2xl border-2 border-pink-400 shadow-sm"
                   >
+                    {/* Inline Icon Selector */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setEditingPickerOpen((prev) => !prev)}
+                        className="w-8 h-8 rounded-xl bg-pink-50 hover:bg-pink-100 border border-pink-300 flex items-center justify-center text-base cursor-pointer shadow-2xs transition"
+                        title="Choose event icon"
+                      >
+                        {editingEventIcon}
+                      </button>
+
+                      {editingPickerOpen && (
+                        <div className="absolute top-full left-0 mt-1.5 z-40 p-2.5 bg-white rounded-2xl shadow-xl border border-pink-200 w-56 max-h-56 overflow-y-auto">
+                          <div className="text-[10px] font-semibold text-pink-900 border-b border-pink-100 pb-1 mb-1.5 flex justify-between items-center">
+                            <span>Change Icon</span>
+                            <button
+                              type="button"
+                              onClick={() => setEditingPickerOpen(false)}
+                              className="text-stone-400 hover:text-stone-700 text-xs"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-6 gap-1">
+                            {ALL_EVENT_ICONS.map((emoji) => (
+                              <button
+                                key={emoji}
+                                type="button"
+                                onClick={() => {
+                                  setEditingEventIcon(emoji);
+                                  setEditingPickerOpen(false);
+                                }}
+                                className={`w-7 h-7 flex items-center justify-center rounded-lg text-sm hover:bg-pink-100 transition cursor-pointer ${
+                                  editingEventIcon === emoji ? 'bg-pink-200 ring-2 ring-pink-500 scale-105' : 'bg-pink-50/40'
+                                }`}
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Inline Recurrence Selector */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setEditingRecurrencePickerOpen((prev) => !prev)}
+                        className="px-2 py-1.5 rounded-xl bg-pink-50 hover:bg-pink-100 border border-pink-300 text-[11px] font-medium text-pink-900 flex items-center gap-1 cursor-pointer transition shadow-2xs"
+                        title="Change Recurrence"
+                      >
+                        <span>
+                          {editingEventRecurrence === 'none'
+                            ? '🗓️ Once'
+                            : editingEventRecurrence === 'yearly-gregorian'
+                            ? '🔁 Yearly (Solar)'
+                            : '🕍 Yearly (Hebrew)'}
+                        </span>
+                        <span className="text-[9px] text-pink-400">▼</span>
+                      </button>
+
+                      {editingRecurrencePickerOpen && (
+                        <div className="absolute top-full left-0 mt-1 z-40 p-1.5 bg-white rounded-xl shadow-xl border border-pink-200 w-52 space-y-1 text-xs">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingEventRecurrence('none');
+                              setEditingRecurrencePickerOpen(false);
+                            }}
+                            className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between transition cursor-pointer ${
+                              editingEventRecurrence === 'none' ? 'bg-pink-100 text-pink-900 font-semibold' : 'hover:bg-pink-50 text-stone-700'
+                            }`}
+                          >
+                            <span>One-off (No repeat)</span>
+                            {editingEventRecurrence === 'none' && <Check className="w-3.5 h-3.5 text-pink-600" />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingEventRecurrence('yearly-gregorian');
+                              setEditingRecurrencePickerOpen(false);
+                            }}
+                            className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between transition cursor-pointer ${
+                              editingEventRecurrence === 'yearly-gregorian' ? 'bg-pink-100 text-pink-900 font-semibold' : 'hover:bg-pink-50 text-stone-700'
+                            }`}
+                          >
+                            <span>Yearly (Solar / Gregorian)</span>
+                            {editingEventRecurrence === 'yearly-gregorian' && <Check className="w-3.5 h-3.5 text-pink-600" />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingEventRecurrence('yearly-hebrew');
+                              setEditingRecurrencePickerOpen(false);
+                            }}
+                            className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between transition cursor-pointer ${
+                              editingEventRecurrence === 'yearly-hebrew' ? 'bg-pink-100 text-pink-900 font-semibold' : 'hover:bg-pink-50 text-stone-700'
+                            }`}
+                          >
+                            <span>Yearly (Hebrew Calendar)</span>
+                            {editingEventRecurrence === 'yearly-hebrew' && <Check className="w-3.5 h-3.5 text-pink-600" />}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
                     <input
                       type="text"
                       autoFocus
@@ -424,17 +766,18 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           e.preventDefault();
-                          handleSaveEditEvent(idx);
+                          handleSaveEditEvent(item);
                         } else if (e.key === 'Escape') {
                           handleCancelEditEvent();
                         }
                       }}
-                      className="px-2.5 py-1 text-xs text-pink-950 bg-pink-50/40 rounded-lg focus:outline-none min-w-[180px] sm:min-w-[220px]"
+                      className="px-2.5 py-1 text-xs text-pink-950 bg-pink-50/40 rounded-lg focus:outline-none min-w-[150px] sm:min-w-[190px]"
+                      placeholder="Event title..."
                     />
                     <button
                       type="button"
-                      onClick={() => handleSaveEditEvent(idx)}
-                      className="p-1 rounded-md bg-pink-500 hover:bg-pink-600 text-white transition cursor-pointer"
+                      onClick={() => handleSaveEditEvent(item)}
+                      className="p-1.5 rounded-lg bg-pink-500 hover:bg-pink-600 text-white transition cursor-pointer shadow-2xs"
                       title="Save (Enter)"
                     >
                       <Check className="w-3.5 h-3.5" />
@@ -442,7 +785,7 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                     <button
                       type="button"
                       onClick={handleCancelEditEvent}
-                      className="p-1 rounded-md text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition cursor-pointer"
+                      className="p-1.5 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition cursor-pointer"
                       title="Cancel (Esc)"
                     >
                       <X className="w-3.5 h-3.5" />
@@ -454,20 +797,93 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
               return (
                 <div
                   key={idx}
-                  className="group inline-flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-xl bg-white border border-pink-200/90 shadow-2xs hover:border-pink-400 transition-all text-xs"
+                  className="group relative inline-flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-2xl bg-white border border-pink-200/90 shadow-2xs hover:border-pink-300 hover:shadow-xs transition-all text-xs"
                 >
-                  <span className="text-pink-500 text-xs font-bold select-none">✦</span>
-                  <span
-                    onClick={() => handleStartEditEvent(idx, evt)}
-                    className="font-medium text-pink-950 cursor-pointer hover:text-pink-600 transition"
-                    title="Click to edit event text"
-                  >
-                    {evt}
-                  </span>
-                  <div className="flex items-center gap-0.5 ml-1 border-l border-pink-100 pl-1">
+                  {/* Event Icon badge on the side - click to quick-change */}
+                  <div className="relative">
                     <button
                       type="button"
-                      onClick={() => handleStartEditEvent(idx, evt)}
+                      onClick={() => setQuickChangeIndex((prev) => (prev === idx ? null : idx))}
+                      className="w-7 h-7 rounded-xl bg-pink-50 hover:bg-pink-100 border border-pink-200 flex items-center justify-center text-sm shadow-2xs cursor-pointer hover:scale-105 transition"
+                      title="Click to change icon"
+                    >
+                      {parsed.icon}
+                    </button>
+
+                    {quickChangeIndex === idx && (
+                      <div className="absolute top-full left-0 mt-1.5 z-40 p-2.5 bg-white rounded-2xl shadow-xl border border-pink-200 w-56 max-h-56 overflow-y-auto">
+                        <div className="text-[10px] font-semibold text-pink-900 border-b border-pink-100 pb-1 mb-1.5 flex justify-between items-center">
+                          <span>Change Icon</span>
+                          <button
+                            type="button"
+                            onClick={() => setQuickChangeIndex(null)}
+                            className="text-stone-400 hover:text-stone-700 text-xs"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-6 gap-1">
+                          {ALL_EVENT_ICONS.map((emoji) => (
+                            <button
+                              key={emoji}
+                              type="button"
+                              onClick={() => handleUpdateEventIcon(item, emoji)}
+                              className={`w-7 h-7 flex items-center justify-center rounded-lg text-sm hover:bg-pink-100 transition cursor-pointer ${
+                                parsed.icon === emoji ? 'bg-pink-200 ring-2 ring-pink-500 scale-105' : 'bg-pink-50/40'
+                              }`}
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Event Title */}
+                  <span
+                    onClick={() => handleStartEditEvent(idx, item)}
+                    className="font-medium text-pink-950 cursor-pointer hover:text-pink-600 transition"
+                    title="Click to edit text"
+                  >
+                    {parsed.title}
+                  </span>
+
+                  {/* Recurrence Badge */}
+                  {parsed.recurrence === 'yearly-gregorian' && (
+                    <span
+                      className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200/80 font-medium inline-flex items-center gap-0.5 select-none"
+                      title="Repeats every year on solar/Gregorian date"
+                    >
+                      <span>🔁</span>
+                      <span>Yearly (Solar)</span>
+                    </span>
+                  )}
+                  {parsed.recurrence === 'yearly-hebrew' && (
+                    <span
+                      className="text-[10px] px-1.5 py-0.5 rounded-md bg-purple-50 text-purple-800 border border-purple-200/80 font-medium inline-flex items-center gap-0.5 select-none"
+                      title="Repeats every year on Hebrew calendar date"
+                    >
+                      <span>🕍</span>
+                      <span>Yearly (Hebrew)</span>
+                    </span>
+                  )}
+
+                  {/* If recurring instance from another original date */}
+                  {item.isRecurringInstance && (
+                    <span
+                      className="text-[9px] text-pink-400 font-normal italic select-none"
+                      title={`Original date: ${item.originalDate}`}
+                    >
+                      ({item.originalDate.slice(0, 4)})
+                    </span>
+                  )}
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-0.5 ml-1 border-l border-pink-100 pl-1 opacity-60 group-hover:opacity-100 transition-opacity">
+                    <button
+                      type="button"
+                      onClick={() => handleStartEditEvent(idx, item)}
                       className="p-1 rounded-md text-stone-400 hover:text-pink-600 hover:bg-pink-50 transition cursor-pointer"
                       title="Edit event"
                     >
@@ -475,9 +891,9 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleRemoveEvent(idx)}
+                      onClick={() => handleRemoveEvent(item)}
                       className="p-1 rounded-md text-stone-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
-                      title="Remove this event"
+                      title="Delete event"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -487,56 +903,198 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
             })}
           </div>
         ) : (
-          <div className="mb-3 py-2 px-3 rounded-xl bg-white/70 border border-dashed border-pink-200/80 text-center text-xs text-pink-400 italic flex items-center justify-center gap-1.5">
+          <div className="mb-3 py-2.5 px-3 rounded-xl bg-white/70 border border-dashed border-pink-200/80 text-center text-xs text-pink-400 italic flex items-center justify-center gap-1.5">
             <span>✨</span>
-            <span>No special events set for this date • Add a birthday, appointment, or trip below</span>
+            <span>No events for this date • Pick an icon & recurrence (Solar/Hebrew/Once) and add your event below</span>
           </div>
         )}
 
-        {/* Quick Add Form + Preset Tags */}
+        {/* Event Form: Icon Selector + Recurrence on the side + text input */}
         <form onSubmit={handleAddEvent} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+          {/* Options on the side: Icon + Recurrence */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* 1. Dedicated Icon Selector button on the side */}
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsIconPickerOpen((prev) => !prev)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-pink-300 hover:border-pink-400 hover:bg-pink-50/70 shadow-2xs transition cursor-pointer group"
+                title="Select event icon"
+              >
+                <span className="text-lg leading-none select-none group-hover:scale-110 transition-transform">
+                  {selectedEventIcon}
+                </span>
+                <span className="text-[9px] text-pink-400 select-none">▼</span>
+              </button>
+
+              {/* Full Categorized Icon Picker Popover */}
+              {isIconPickerOpen && (
+                <div className="absolute top-full left-0 mt-1.5 z-40 p-3 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-pink-200 w-72 max-h-72 overflow-y-auto space-y-2.5">
+                  <div className="text-[11px] font-semibold text-pink-900 border-b border-pink-100 pb-1.5 flex justify-between items-center">
+                    <span>Select Event Icon</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsIconPickerOpen(false)}
+                      className="text-stone-400 hover:text-stone-700 text-xs px-1"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  {EVENT_ICON_CATEGORIES.map((cat) => (
+                    <div key={cat.name}>
+                      <div className="text-[10px] font-medium text-pink-700/80 mb-1">{cat.name}</div>
+                      <div className="grid grid-cols-6 gap-1">
+                        {cat.icons.map((emoji) => (
+                          <button
+                            key={emoji}
+                            type="button"
+                            onClick={() => {
+                              setSelectedEventIcon(emoji);
+                              setIsIconPickerOpen(false);
+                            }}
+                            className={`w-8 h-8 flex items-center justify-center rounded-xl text-base hover:bg-pink-100 transition cursor-pointer select-none ${
+                              selectedEventIcon === emoji
+                                ? 'bg-pink-200 ring-2 ring-pink-500 scale-105'
+                                : 'bg-pink-50/50 hover:scale-105'
+                            }`}
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 2. Dedicated Recurrence Selector button on the side */}
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsRecurrencePickerOpen((prev) => !prev)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-pink-300 hover:border-pink-400 hover:bg-pink-50/70 shadow-2xs transition cursor-pointer text-xs font-medium text-pink-950 group"
+                title="Select Recurrence (Solar / Hebrew)"
+              >
+                <span className="text-pink-500">
+                  {newEventRecurrence === 'none' ? '🗓️' : newEventRecurrence === 'yearly-gregorian' ? '🔁' : '🕍'}
+                </span>
+                <span className="hidden sm:inline">
+                  {newEventRecurrence === 'none'
+                    ? 'One-off'
+                    : newEventRecurrence === 'yearly-gregorian'
+                    ? 'Yearly (Solar)'
+                    : 'Yearly (Hebrew)'}
+                </span>
+                <span className="sm:hidden">
+                  {newEventRecurrence === 'none'
+                    ? 'Once'
+                    : newEventRecurrence === 'yearly-gregorian'
+                    ? 'Solar'
+                    : 'Hebrew'}
+                </span>
+                <span className="text-[9px] text-pink-400 select-none">▼</span>
+              </button>
+
+              {/* Recurrence Dropdown */}
+              {isRecurrencePickerOpen && (
+                <div className="absolute top-full left-0 mt-1.5 z-40 p-2 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-pink-200 w-64 space-y-1.5">
+                  <div className="text-[10px] font-semibold text-pink-900 border-b border-pink-100 pb-1 mb-1 px-1 flex justify-between items-center">
+                    <span>Recurrence Frequency</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsRecurrencePickerOpen(false)}
+                      className="text-stone-400 hover:text-stone-700 text-xs px-1"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewEventRecurrence('none');
+                      setIsRecurrencePickerOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded-xl text-xs flex items-center justify-between transition cursor-pointer ${
+                      newEventRecurrence === 'none'
+                        ? 'bg-pink-100 text-pink-900 font-semibold'
+                        : 'hover:bg-pink-50 text-stone-700'
+                    }`}
+                  >
+                    <div className="flex flex-col text-left">
+                      <span className="font-medium">▫️ One-off (No repeat)</span>
+                      <span className="text-[10px] text-stone-500">Single event for this date only</span>
+                    </div>
+                    {newEventRecurrence === 'none' && <Check className="w-3.5 h-3.5 text-pink-600" />}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewEventRecurrence('yearly-gregorian');
+                      setIsRecurrencePickerOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded-xl text-xs flex items-center justify-between transition cursor-pointer ${
+                      newEventRecurrence === 'yearly-gregorian'
+                        ? 'bg-pink-100 text-pink-900 font-semibold'
+                        : 'hover:bg-pink-50 text-stone-700'
+                    }`}
+                  >
+                    <div className="flex flex-col text-left">
+                      <span className="font-medium">📅 Yearly (Solar / Gregorian)</span>
+                      <span className="text-[10px] text-pink-600 font-normal">
+                        Repeats every year on {selectedDate.slice(5)}
+                      </span>
+                    </div>
+                    {newEventRecurrence === 'yearly-gregorian' && <Check className="w-3.5 h-3.5 text-pink-600" />}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewEventRecurrence('yearly-hebrew');
+                      setIsRecurrencePickerOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded-xl text-xs flex items-center justify-between transition cursor-pointer ${
+                      newEventRecurrence === 'yearly-hebrew'
+                        ? 'bg-pink-100 text-pink-900 font-semibold'
+                        : 'hover:bg-pink-50 text-stone-700'
+                    }`}
+                  >
+                    <div className="flex flex-col text-left">
+                      <span className="font-medium">🕍 Yearly (Hebrew Calendar)</span>
+                      <span className="text-[10px] text-pink-600 font-normal">
+                        Repeats every year on {hebrewInfo.shortHebrewDateStr || 'Hebrew date'}
+                      </span>
+                    </div>
+                    {newEventRecurrence === 'yearly-hebrew' && <Check className="w-3.5 h-3.5 text-pink-600" />}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Event Title Input */}
           <div className="relative flex-1">
             <input
               type="text"
               value={newEventText}
               onChange={(e) => setNewEventText(e.target.value)}
-              placeholder="Write important event (e.g. Maya's Birthday 🎂, Dentist 14:00 🦷, Flight to Paris ✈️)..."
+              placeholder="Event title (e.g. Birthday, Anniversary, Memorial, Flight, Dinner)..."
               className="w-full px-3.5 py-2 text-xs bg-white rounded-xl border border-pink-200 focus:outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200/50 text-pink-950 placeholder:text-pink-300 shadow-2xs transition"
             />
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0 justify-between sm:justify-start">
-            {/* Quick emoji presets */}
-            <div className="flex items-center gap-1">
-              {[
-                { icon: '🎂', label: 'Birthday' },
-                { icon: '✈️', label: 'Trip' },
-                { icon: '🦷', label: 'Doctor' },
-                { icon: '💼', label: 'Meeting' },
-                { icon: '🎉', label: 'Party' },
-                { icon: '💍', label: 'Anniversary' },
-              ].map((item) => (
-                <button
-                  key={item.icon}
-                  type="button"
-                  onClick={() => setNewEventText((prev) => (prev ? `${prev} ${item.icon}` : `${item.label} ${item.icon}`))}
-                  className="px-2 py-1 rounded-lg bg-white hover:bg-pink-50 text-stone-700 text-xs border border-pink-100 hover:border-pink-300 transition cursor-pointer shadow-2xs"
-                  title={`Add ${item.label}`}
-                >
-                  {item.icon}
-                </button>
-              ))}
-            </div>
-
-            <button
-              type="submit"
-              disabled={!newEventText.trim()}
-              className="px-4 py-2 rounded-xl bg-pink-500 hover:bg-pink-600 disabled:opacity-40 text-white text-xs font-semibold shadow-2xs transition cursor-pointer shrink-0 flex items-center gap-1"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Add Event</span>
-            </button>
-          </div>
+          {/* Add Event Button */}
+          <button
+            type="submit"
+            disabled={!newEventText.trim()}
+            className="px-4 py-2 rounded-xl bg-pink-500 hover:bg-pink-600 disabled:opacity-40 text-white text-xs font-semibold shadow-2xs transition cursor-pointer shrink-0 flex items-center justify-center gap-1.5"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Add Event</span>
+          </button>
         </form>
       </div>
 
@@ -905,22 +1463,376 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
               </div>
             </div>
           </div>
+        </div>
+      </div>
 
-          {/* 4. DAILY AFFIRMATION & ENCOURAGEMENT STAMP (Image 2 style) */}
-          <div className="p-3.5 rounded-2xl bg-gradient-to-br from-[#fff2f6] via-[#fdf5f8] to-[#fff2f6] border border-pink-200/90 shadow-2xs text-center relative overflow-hidden">
-            <div className="text-xl mb-1 select-none">✨</div>
-            <h4 className="text-[10px] font-bold text-pink-500 uppercase tracking-widest mb-1">
-              Daily Encouragement
-            </h4>
-            <p className="text-xs font-script text-pink-900 leading-snug">
-              "You are capable of amazing things. Take it one gentle step at a time. ♡"
-            </p>
-            <div className="mt-2 inline-flex items-center gap-1 text-[10px] text-pink-600 bg-white px-2 py-0.5 rounded-full border border-pink-200">
-              <span>🌸</span>
-              <span>Proud of you</span>
+      {/* ========================================================
+          MIDDAY PULSE & MOOD PIVOT (Check-in midway through the day)
+         ======================================================== */}
+      <div className="mt-4 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-[#fff4f8] via-[#fffbfd] to-[#f5f8ff] border border-pink-200/90 shadow-2xs relative">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 mb-3 border-b border-pink-100">
+          <div className="flex items-center gap-2">
+            <span className="text-xl select-none">☀️</span>
+            <div>
+              <h3 className="text-xs sm:text-sm font-serif font-bold text-pink-950 uppercase tracking-wider flex items-center gap-1.5">
+                <span>Midday Pulse & Mood Pivot</span>
+                {middayCheckIn?.completed && (
+                  <span className="text-[10px] font-sans font-medium text-emerald-700 bg-emerald-100/90 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                    <Check className="w-2.5 h-2.5" /> Checked In
+                  </span>
+                )}
+              </h3>
+              <p className="text-[11px] text-pink-600 font-script">
+                Pause at noon • How are you feeling right now? Any cravings, mood shifts, or spontaneous wishes? ♡
+              </p>
             </div>
           </div>
+
+          <div className="flex items-center gap-1.5 self-start sm:self-auto">
+            {middayCheckIn?.completed && !isEditingMidday && (
+              <button
+                type="button"
+                onClick={() => setIsEditingMidday(true)}
+                className="px-2.5 py-1 text-xs text-pink-700 hover:text-pink-950 bg-white rounded-xl border border-pink-200 shadow-2xs flex items-center gap-1 cursor-pointer transition"
+              >
+                <Pencil className="w-3 h-3 text-pink-500" />
+                <span>Update Midday Pulse</span>
+              </button>
+            )}
+          </div>
         </div>
+
+        {isEditingMidday ? (
+          <form onSubmit={handleSaveMiddayPulse} className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              {/* Question 1: How are you feeling now / Mood Shift */}
+              <div className="p-3 bg-white/90 rounded-xl border border-pink-100 space-y-1.5">
+                <label className="block text-[11px] font-bold text-pink-900 flex items-center gap-1">
+                  <span>💭</span>
+                  <span>How's your mood & energy now?</span>
+                </label>
+                <input
+                  type="text"
+                  value={middayMoodShift}
+                  onChange={(e) => setMiddayMoodShift(e.target.value)}
+                  placeholder="e.g. energized, a bit drowsy, calm, feeling productive..."
+                  className="w-full p-2 text-xs bg-pink-50/30 rounded-lg border border-pink-200 focus:bg-white focus:outline-none focus:ring-1 focus:ring-pink-400 text-pink-950 placeholder:text-pink-300"
+                />
+                <div className="flex flex-wrap gap-1 pt-1">
+                  {['Peaceful ✨', 'Need a break ☕', 'Second wind ⚡', 'Happy 💖', 'Sleepy 🥱'].map((chip) => (
+                    <button
+                      key={chip}
+                      type="button"
+                      onClick={() => setMiddayMoodShift(chip)}
+                      className="text-[9px] px-2 py-0.5 rounded-full bg-pink-50 hover:bg-pink-100 text-pink-800 border border-pink-200/60 cursor-pointer"
+                    >
+                      {chip}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Question 2: Cravings & Spontaneous Desires */}
+              <div className="p-3 bg-white/90 rounded-xl border border-pink-100 space-y-1.5">
+                <label className="block text-[11px] font-bold text-pink-900 flex items-center gap-1">
+                  <span>🍫</span>
+                  <span>Craving or desire right now?</span>
+                </label>
+                <input
+                  type="text"
+                  value={middayCraving}
+                  onChange={(e) => setMiddayCraving(e.target.value)}
+                  placeholder="e.g. an iced latte, fresh air walk, chocolate, a quiet hug..."
+                  className="w-full p-2 text-xs bg-pink-50/30 rounded-lg border border-pink-200 focus:bg-white focus:outline-none focus:ring-1 focus:ring-pink-400 text-pink-950 placeholder:text-pink-300"
+                />
+                <div className="flex flex-wrap gap-1 pt-1">
+                  {['Walk outside 🌿', 'Iced Matcha 🍵', 'Sweet treat 🍪', '10m Stretch 🧘‍♀️'].map((chip) => (
+                    <button
+                      key={chip}
+                      type="button"
+                      onClick={() => setMiddayCraving(chip)}
+                      className="text-[9px] px-2 py-0.5 rounded-full bg-pink-50 hover:bg-pink-100 text-pink-800 border border-pink-200/60 cursor-pointer"
+                    >
+                      {chip}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Question 3: Afternoon Intention */}
+              <div className="p-3 bg-white/90 rounded-xl border border-pink-100 space-y-1.5">
+                <label className="block text-[11px] font-bold text-pink-900 flex items-center gap-1">
+                  <span>🎯</span>
+                  <span>Gentle focus for this afternoon:</span>
+                </label>
+                <input
+                  type="text"
+                  value={middayIntention}
+                  onChange={(e) => setMiddayIntention(e.target.value)}
+                  placeholder="e.g. finish project draft, gentle self-care evening..."
+                  className="w-full p-2 text-xs bg-pink-50/30 rounded-lg border border-pink-200 focus:bg-white focus:outline-none focus:ring-1 focus:ring-pink-400 text-pink-950 placeholder:text-pink-300"
+                />
+                <div className="flex flex-wrap gap-1 pt-1">
+                  {['Deep focus sprint ⏳', 'Wrap up early 🌸', 'Gentle pace 🕊️'].map((chip) => (
+                    <button
+                      key={chip}
+                      type="button"
+                      onClick={() => setMiddayIntention(chip)}
+                      className="text-[9px] px-2 py-0.5 rounded-full bg-pink-50 hover:bg-pink-100 text-pink-800 border border-pink-200/60 cursor-pointer"
+                    >
+                      {chip}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1">
+              {middayCheckIn?.completed && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditingMidday(false)}
+                  className="px-3 py-1.5 text-xs text-pink-700 hover:bg-pink-50 rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+              )}
+              <button
+                type="submit"
+                className="px-4 py-1.5 text-xs font-semibold bg-pink-500 hover:bg-pink-600 text-white rounded-xl shadow-2xs cursor-pointer flex items-center gap-1.5"
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>Save Midday Pulse</span>
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <div className="p-3 bg-white/80 rounded-xl border border-pink-100/90 shadow-2xs">
+              <span className="text-[10px] font-bold text-pink-500 uppercase tracking-wider block mb-0.5">
+                Current State & Mood
+              </span>
+              <p className="text-xs font-semibold text-pink-950">
+                {middayCheckIn?.moodShift || 'Peaceful'}
+              </p>
+            </div>
+            <div className="p-3 bg-white/80 rounded-xl border border-pink-100/90 shadow-2xs">
+              <span className="text-[10px] font-bold text-pink-500 uppercase tracking-wider block mb-0.5">
+                Craving / Wish
+              </span>
+              <p className="text-xs font-medium text-pink-900">
+                {middayCheckIn?.cravingOrDesire || '—'}
+              </p>
+            </div>
+            <div className="p-3 bg-white/80 rounded-xl border border-pink-100/90 shadow-2xs">
+              <span className="text-[10px] font-bold text-pink-500 uppercase tracking-wider block mb-0.5">
+                Afternoon Intention
+              </span>
+              <p className="text-xs font-medium text-pink-900">
+                {middayCheckIn?.afternoonIntention || '—'}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ========================================================
+          DAILY JOKES, IDIOMS & WITTICISMS (Save multiple items per day!)
+         ======================================================== */}
+      <div className="mt-4 p-3.5 sm:p-4 rounded-2xl bg-[#fffbfc] border border-amber-200/80 shadow-2xs relative">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 mb-3 border-b border-amber-100">
+          <div className="flex items-center gap-2">
+            <span className="text-xl select-none">🃏</span>
+            <div>
+              <h3 className="text-xs sm:text-sm font-serif font-bold text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
+                <span>Today's Jokes, Idioms & Catchy Phrases</span>
+                {witItems.length > 0 && (
+                  <span className="text-[10px] font-sans font-medium text-amber-800 bg-amber-100/90 px-2 py-0.5 rounded-full border border-amber-200">
+                    {witItems.length}
+                  </span>
+                )}
+              </h3>
+              <p className="text-[11px] text-amber-700/80 font-script">
+                Found a joke you loved or an idiom you learned today? Save it here! (Add as many as you like) ♡
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            {onOpenJokesDigest && (
+              <button
+                type="button"
+                onClick={onOpenJokesDigest}
+                className="px-3 py-1 text-xs bg-amber-100/80 hover:bg-amber-200/80 text-amber-900 rounded-xl font-medium border border-amber-200/80 shadow-2xs transition flex items-center gap-1 cursor-pointer"
+                title="View Hebrew Monthly and Annual Summary of all jokes"
+              >
+                <Smile className="w-3.5 h-3.5 text-amber-700" />
+                <span className="hidden sm:inline">Monthly & Annual Digest</span>
+                <span className="sm:hidden">Digest 📜</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                setEditingWitId(null);
+                setWitText('');
+                setWitPunchline('');
+                setIsAddingWit(true);
+              }}
+              className="px-3 py-1 text-xs bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-semibold shadow-2xs transition flex items-center gap-1 cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Joke / Phrase</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Existing Wit Items */}
+        {witItems.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-3">
+            {witItems.map((item) => (
+              <div
+                key={item.id}
+                className="p-3 bg-white rounded-xl border border-amber-200/80 shadow-2xs relative group hover:border-amber-300 transition"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="text-xs">
+                      {item.type === 'joke' ? '😂' : item.type === 'idiom' ? '💡' : item.type === 'quote' ? '📜' : '✨'}
+                    </span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200/60">
+                      {item.type}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                    <button
+                      type="button"
+                      onClick={() => handleStartEditWit(item)}
+                      className="p-1 text-stone-400 hover:text-amber-600 rounded cursor-pointer"
+                      title="Edit"
+                    >
+                      <Pencil className="w-3 h-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteWit(item.id)}
+                      className="p-1 text-stone-400 hover:text-rose-500 rounded cursor-pointer"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+
+                <p className="text-xs font-semibold text-stone-900 leading-snug">
+                  "{item.text}"
+                </p>
+
+                {item.meaningOrPunchline && (
+                  <p className="text-xs font-script text-amber-800 mt-1 italic leading-snug">
+                    ↳ {item.meaningOrPunchline}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="mb-3 py-3 px-3 rounded-xl bg-amber-50/40 border border-dashed border-amber-200 text-center text-xs text-amber-700/80">
+            No jokes or idioms saved yet for today. Heard something funny or clever? Jot it down!
+          </div>
+        )}
+
+        {/* Add/Edit Form Modal/Inline */}
+        {isAddingWit && (
+          <form onSubmit={handleSaveWit} className="p-3 bg-white rounded-2xl border-2 border-amber-300 space-y-2.5 animate-in fade-in mb-3">
+            <div className="flex items-center justify-between border-b border-amber-100 pb-1.5">
+              <span className="text-xs font-bold text-amber-950">
+                {editingWitId ? 'Edit Entry' : 'Add New Joke, Idiom or Phrase'}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAddingWit(false);
+                  setEditingWitId(null);
+                }}
+                className="text-stone-400 hover:text-stone-600 text-xs px-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] font-medium text-stone-600 mr-1">Type:</span>
+              {(['joke', 'idiom', 'quote', 'witticism'] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setWitType(t)}
+                  className={`text-xs px-2.5 py-1 rounded-full border transition cursor-pointer capitalize ${
+                    witType === t
+                      ? 'bg-amber-100 border-amber-400 text-amber-950 font-bold'
+                      : 'bg-stone-50 border-stone-200 text-stone-600'
+                  }`}
+                >
+                  {t === 'joke' ? '😂 Joke' : t === 'idiom' ? '💡 Idiom' : t === 'quote' ? '📜 Quote' : '✨ Witticism'}
+                </button>
+              ))}
+            </div>
+
+            <div className="space-y-1.5">
+              <input
+                type="text"
+                value={witText}
+                onChange={(e) => setWitText(e.target.value)}
+                placeholder={witType === 'joke' ? "The setup or joke question..." : "The phrase or idiom..."}
+                className="w-full p-2 text-xs bg-amber-50/20 rounded-xl border border-amber-200 focus:bg-white focus:outline-none focus:ring-1 focus:ring-amber-400 text-stone-900"
+              />
+              <input
+                type="text"
+                value={witPunchline}
+                onChange={(e) => setWitPunchline(e.target.value)}
+                placeholder={witType === 'joke' ? "The punchline! 😂" : "What it means or author..."}
+                className="w-full p-2 text-xs bg-amber-50/20 rounded-xl border border-amber-200 focus:bg-white focus:outline-none focus:ring-1 focus:ring-amber-400 text-stone-900"
+              />
+            </div>
+
+            <div className="flex justify-between items-center pt-1">
+              {/* Quick Inspiration Sparks */}
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-amber-700">Need inspiration?</span>
+                <button
+                  type="button"
+                  onClick={() => handlePickCuratedWit(CURATED_WIT_SPARKS[Math.floor(Math.random() * CURATED_WIT_SPARKS.length)])}
+                  className="text-[10px] text-pink-600 hover:underline cursor-pointer"
+                >
+                  Try a classic one ✨
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddingWit(false);
+                    setEditingWitId(null);
+                  }}
+                  className="px-3 py-1 text-xs text-stone-600 hover:bg-stone-100 rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!witText.trim()}
+                  className="px-4 py-1 text-xs font-semibold bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white rounded-xl shadow-2xs cursor-pointer"
+                >
+                  {editingWitId ? 'Update' : 'Add to Today'}
+                </button>
+              </div>
+            </div>
+          </form>
+        )}
       </div>
 
       {/* ========================================================

@@ -24,10 +24,12 @@ import { MonthlyBookSpread } from './components/MonthlyBookSpread';
 import { DayBookPage } from './components/DayBookPage';
 import { IdeasJournal } from './components/IdeasJournal';
 import { CycleTracker } from './components/CycleTracker';
+import { JokesDigest } from './components/JokesDigest';
 import { BackupModal } from './components/BackupModal';
 import { PinLockScreen, PinSettingsModal } from './components/PinLockModal';
 import { PlannerCover } from './components/PlannerCover';
 import { useTimeReminders } from './hooks/useTimeReminders';
+import { useInactivityLock } from './hooks/useInactivityLock';
 import { ReminderChimeAlert } from './components/ReminderChimeAlert';
 
 export default function App() {
@@ -42,8 +44,26 @@ export default function App() {
     return Boolean(db.settings?.pinCode && db.settings?.isPinLocked);
   });
 
+  // Auto-lock after 20 minutes of inactivity (redirect to cover page with code)
+  const autoLockMinutes = db.settings?.autoLockMinutes ?? 20;
+  const isCurrentlyLocked = Boolean((isLocked && db.settings?.pinCode) || showCover);
+
+  useInactivityLock({
+    timeoutMinutes: autoLockMinutes,
+    enabled: !isCurrentlyLocked && autoLockMinutes > 0,
+    onLock: () => {
+      if (db.settings?.pinCode) {
+        setIsLocked(true);
+        handleUpdateSettings({ isPinLocked: true });
+        setShowCover(true);
+      } else {
+        setShowCover(true);
+      }
+    },
+  });
+
   const soundEnabled = db.settings?.soundAlertsEnabled !== false;
-  const { activeAlert, dismissAlert, triggerTestSound } = useTimeReminders(
+  const { activeAlert, dismissAlert, muteReminder, triggerTestSound } = useTimeReminders(
     db.tasks,
     db.dayLogs,
     soundEnabled
@@ -232,16 +252,27 @@ export default function App() {
     <div className={`min-h-screen ${deskBgClass} transition-colors duration-500 font-sans`}>
       {/* Active Audio Reminder Banner */}
       {activeAlert && (
-        <ReminderChimeAlert alert={activeAlert} onDismiss={dismissAlert} />
+        <ReminderChimeAlert
+          alert={activeAlert}
+          onDismiss={dismissAlert}
+          onMuteFuture={muteReminder}
+        />
       )}
 
-      {/* If PIN is locked, block view with lock screen */}
-      {isLocked && db.settings.pinCode ? (
-        <PinLockScreen currentPin={db.settings.pinCode} onUnlock={handleUnlock} />
-      ) : showCover ? (
+      {/* If PIN is locked or cover is active, show the Planner Cover with integrated lock */}
+      {(isLocked && db.settings.pinCode) || showCover ? (
         <div className="min-h-screen flex flex-col items-center justify-center p-4">
           <PlannerCover
-            onOpen={() => setShowCover(false)}
+            isLocked={Boolean(isLocked && db.settings.pinCode)}
+            currentPin={db.settings.pinCode}
+            onUnlock={() => {
+              handleUnlock();
+              setShowCover(false);
+            }}
+            onOpen={() => {
+              if (isLocked && db.settings.pinCode) return;
+              setShowCover(false);
+            }}
             userDisplayName={db.settings.userDisplayName}
           />
         </div>
@@ -274,6 +305,7 @@ export default function App() {
                 selectedDate={selectedDate}
                 onSelectDay={handleSelectDayAndOpenPage}
                 onUpdateMonthlyNote={handleUpdateMonthlyNote}
+                onOpenJokesDigest={() => setCurrentView('jokes-digest')}
               />
             )}
 
@@ -289,12 +321,14 @@ export default function App() {
                 onDeleteTask={handleDeleteTask}
                 onCarryOverTasks={handleCarryOverTasks}
                 dayLog={db.dayLogs[selectedDate]}
+                allDayLogs={db.dayLogs}
                 onUpdateDayLog={handleUpdateDayLog}
                 cycleLog={db.cycleLogs[selectedDate]}
                 onUpdateCycleLog={handleUpdateCycleLog}
                 allCycleLogs={db.cycleLogs}
                 habits={db.habits}
                 settings={db.settings}
+                onOpenJokesDigest={() => setCurrentView('jokes-digest')}
               />
             )}
 
@@ -320,6 +354,23 @@ export default function App() {
                 onUpdateSettings={handleUpdateSettings}
               />
             )}
+
+            {/* VIEW 5: Laughter & Wisdom Treasury (Monthly & Annual Hebrew Digest) */}
+            {currentView === 'jokes-digest' && (
+              <JokesDigest
+                allDayLogs={db.dayLogs}
+                onNavigateToDay={(dateStr) => {
+                  setSelectedDate(dateStr);
+                  setCurrentView('day');
+                }}
+                onDeleteWitItem={(dateKey, witId) => {
+                  const dayLog = db.dayLogs[dateKey];
+                  if (!dayLog || !dayLog.witItems) return;
+                  const filtered = dayLog.witItems.filter((w) => w.id !== witId);
+                  handleUpdateDayLog(dateKey, { witItems: filtered });
+                }}
+              />
+            )}
           </BookContainer>
 
           {/* Backup & Restore Modal */}
@@ -336,8 +387,10 @@ export default function App() {
           <PinSettingsModal
             isOpen={isPinSettingsOpen}
             currentPin={db.settings.pinCode}
+            autoLockMinutes={db.settings.autoLockMinutes ?? 20}
             onClose={() => setIsPinSettingsOpen(false)}
             onSavePin={handleSetPin}
+            onSaveAutoLockMinutes={(mins) => handleUpdateSettings({ autoLockMinutes: mins })}
           />
         </>
       )}

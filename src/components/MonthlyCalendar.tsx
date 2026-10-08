@@ -7,11 +7,13 @@ import {
   Lightbulb, 
   Heart, 
   ArrowLeft,
+  ArrowRight,
   Sparkles,
   CircleDot
 } from 'lucide-react';
 import { Task, IdeaEntry, CycleDayLog, DayLog, AppSettings } from '../types';
-import { formatDateKey, formatHebrewDateString, parseDateKey, calculateCyclePrediction } from '../services/storage';
+import { formatDateKey, parseDateKey, calculateCyclePrediction, parseEventItem, getEventStringsForDate } from '../services/storage';
+import { getHebrewDateInfo } from '../services/hebrewCalendar';
 
 interface MonthlyCalendarProps {
   tasks: Task[];
@@ -22,20 +24,20 @@ interface MonthlyCalendarProps {
   onSelectDateAndNavigateToDay: (dateStr: string) => void;
 }
 
-const HEBREW_DAYS = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
-const HEBREW_MONTHS = [
-  'ינואר',
-  'פברואר',
-  'מרץ',
-  'אפריל',
-  'מאי',
-  'יוני',
-  'יולי',
-  'אוגוסט',
-  'ספטמבר',
-  'אוקטובר',
-  'נובמבר',
-  'דצמבר',
+const ENGLISH_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const ENGLISH_MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ];
 
 export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
@@ -139,21 +141,21 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
             <button
               onClick={handlePrevMonth}
               className="p-2 rounded-xl hover:bg-stone-100 text-stone-600 transition cursor-pointer"
-              title="חודש קודם"
+              title="Previous Month"
             >
-              <ChevronRight className="w-5 h-5" />
+              <ChevronLeft className="w-5 h-5" />
             </button>
 
             <h2 className="text-xl sm:text-2xl font-bold text-stone-900 min-w-40 text-center">
-              {HEBREW_MONTHS[currentMonth]} {currentYear}
+              {ENGLISH_MONTHS[currentMonth]} {currentYear}
             </h2>
 
             <button
               onClick={handleNextMonth}
               className="p-2 rounded-xl hover:bg-stone-100 text-stone-600 transition cursor-pointer"
-              title="חודש הבא"
+              title="Next Month"
             >
-              <ChevronLeft className="w-5 h-5" />
+              <ChevronRight className="w-5 h-5" />
             </button>
           </div>
 
@@ -162,23 +164,23 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
               onClick={handleJumpToday}
               className="px-3.5 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-semibold transition cursor-pointer"
             >
-              חזרה להיום
+              Jump to Today
             </button>
 
             {/* Quick legend */}
-            <div className="hidden md:flex items-center gap-3 text-[11px] text-stone-500 border-r border-stone-200 pr-3">
+            <div className="hidden md:flex items-center gap-3 text-[11px] text-stone-500 border-l border-stone-200 pl-3">
               <span className="flex items-center gap-1">
                 <span className="w-2 h-2 rounded-full bg-indigo-500" />
-                משימות
+                Tasks
               </span>
               <span className="flex items-center gap-1">
                 <span className="w-2 h-2 rounded-full bg-amber-500" />
-                רעיונות
+                Ideas
               </span>
               {settings.enableCycleTracker && (
                 <span className="flex items-center gap-1">
                   <span className="w-2 h-2 rounded-full bg-rose-500" />
-                  מעקב 🌸
+                  Cycle 🌸
                 </span>
               )}
             </div>
@@ -188,21 +190,21 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
         {/* Month Summary Bar */}
         <div className="mt-4 pt-3 border-t border-stone-100 grid grid-cols-2 sm:grid-cols-3 gap-2 text-center text-xs text-stone-600">
           <div className="p-2 rounded-xl bg-stone-50">
-            <span className="font-bold text-stone-900 ml-1">{monthTasks.length}</span>
-            משימות החודש ({monthCompletedTasks} הושלמו)
+            <span className="font-bold text-stone-900 mr-1">{monthTasks.length}</span>
+            Monthly Tasks ({monthCompletedTasks} completed)
           </div>
           <div className="p-2 rounded-xl bg-stone-50">
-            <span className="font-bold text-stone-900 ml-1">{monthIdeas.length}</span>
-            רעיונות ומחשבות שתועדו
+            <span className="font-bold text-stone-900 mr-1">{monthIdeas.length}</span>
+            Ideas & Sparks recorded
           </div>
           <div className="p-2 rounded-xl bg-stone-50 col-span-2 sm:col-span-1">
-            <span className="font-bold text-stone-900 ml-1">
+            <span className="font-bold text-stone-900 mr-1">
               {monthTasks.length > 0
                 ? Math.round((monthCompletedTasks / monthTasks.length) * 100)
                 : 0}
               %
             </span>
-            אחוז ביצוע חודשי
+            Monthly Completion Rate
           </div>
         </div>
       </div>
@@ -211,11 +213,11 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
       <div className="p-4 sm:p-5 rounded-2xl bg-white shadow-xs border border-stone-200">
         {/* Days of week headers */}
         <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-2 text-center">
-          {HEBREW_DAYS.map((dayName, idx) => (
+          {ENGLISH_DAYS.map((dayName, idx) => (
             <div
               key={idx}
               className={`py-2 text-xs font-bold ${
-                idx === 6 ? 'text-indigo-600' : 'text-stone-500'
+                idx === 0 || idx === 6 ? 'text-indigo-600' : 'text-stone-500'
               }`}
             >
               {dayName}
@@ -232,7 +234,7 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
             const dayTasks = tasks.filter((t) => t.date === cell.key);
             const completedCount = dayTasks.filter((t) => t.completed).length;
             const hasIdeas = ideas.some((i) => i.date === cell.key);
-            const dayEvents = dayLogs[cell.key]?.importantEvents || [];
+            const dayEvents = getEventStringsForDate(cell.key, dayLogs);
             const cycleLog = cycleLogs[cell.key];
             const isPeriod = cycleLog?.isPeriod;
 
@@ -278,22 +280,22 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
 
                   {/* Period icon or discrete flower */}
                   {isPeriod && (
-                    <span className="text-[11px]" title="🌸">
+                    <span className="text-[11px]" title="🌸 Cycle">
                       🌸
                     </span>
                   )}
                   {!isPeriod && isPredictedPeriod && (
                     <span
                       className="text-[9px] px-1 py-0.2 rounded-sm bg-rose-100 text-rose-700 font-semibold"
-                      title="צפי 🌸"
+                      title="Predicted Period 🌸"
                     >
-                      צפי
+                      Period
                     </span>
                   )}
                   {!isPeriod && isPredictedOvulation && (
                     <span
                       className="text-[10px]"
-                      title="ביוץ משוער"
+                      title="Estimated Ovulation"
                     >
                       ✨
                     </span>
@@ -304,16 +306,19 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
                 <div className="flex-1 min-h-0 my-0.5 overflow-hidden flex flex-col justify-start space-y-0.5">
                   {dayEvents.length > 0 && (
                     <div className="space-y-0.5 my-0.5">
-                      {dayEvents.slice(0, 2).map((evt, idx) => (
-                        <div
-                          key={idx}
-                          title={evt}
-                          className="flex items-start gap-1 text-[9px] sm:text-[9.5px] px-1 py-0.5 rounded-md font-medium bg-[#fff3f6] text-pink-950 border-l-[3px] border-l-pink-400 border-y border-r border-pink-200/70 leading-tight overflow-hidden"
-                        >
-                          <span className="shrink-0 text-[9px] text-pink-500 mt-0.5 font-bold">✦</span>
-                          <span className="break-words line-clamp-1 flex-1">{evt}</span>
-                        </div>
-                      ))}
+                      {dayEvents.slice(0, 2).map((evt, idx) => {
+                        const parsed = parseEventItem(evt);
+                        return (
+                          <div
+                            key={idx}
+                            title={evt}
+                            className="flex items-start gap-1 text-[9px] sm:text-[9.5px] px-1 py-0.5 rounded-md font-medium bg-[#fff3f6] text-pink-950 border-l-[3px] border-l-pink-400 border-y border-r border-pink-200/70 leading-tight overflow-hidden"
+                          >
+                            <span className="shrink-0 text-[10px] mt-0.5 leading-none select-none">{parsed.icon}</span>
+                            <span className="break-words line-clamp-1 flex-1">{parsed.title}</span>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
 
@@ -327,7 +332,7 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
                         }`}
                       />
                       <span className="truncate hidden sm:inline">
-                        {completedCount}/{dayTasks.length} משימות
+                        {completedCount}/{dayTasks.length} tasks
                       </span>
                       <span className="sm:hidden font-bold">{dayTasks.length}</span>
                     </div>
@@ -336,7 +341,7 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
                   {hasIdeas && (
                     <div className="flex items-center gap-1 text-[10px] text-amber-600 font-medium">
                       <Lightbulb className="w-2.5 h-2.5 shrink-0" />
-                      <span className="hidden sm:inline">רעיון</span>
+                      <span className="hidden sm:inline">Idea</span>
                     </div>
                   )}
                 </div>
@@ -354,16 +359,26 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
               <div className="flex items-center gap-2">
                 <CalendarIcon className="w-5 h-5 text-indigo-600" />
                 <h3 className="font-bold text-base text-stone-900">
-                  {formatHebrewDateString(selectedDayKey)}
+                  {new Date(selectedDayKey + 'T00:00:00').toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                  })}
+                  {getHebrewDateInfo(parseDateKey(selectedDayKey)).shortHebrewDateStr && (
+                    <span className="ml-2 px-2 py-0.5 rounded-md bg-stone-100 text-stone-600 text-xs font-serif font-normal">
+                      {getHebrewDateInfo(parseDateKey(selectedDayKey)).shortHebrewDateStr}
+                    </span>
+                  )}
                 </h3>
                 {selectedDayKey === todayKey && (
                   <span className="px-2 py-0.5 text-xs font-semibold bg-rose-100 text-rose-700 rounded-full">
-                    היום
+                    Today
                   </span>
                 )}
               </div>
               <p className="text-xs text-stone-500 mt-0.5">
-                סיכום מה שקורה ביום זה
+                Overview of events, tasks, and notes for this day
               </p>
             </div>
 
@@ -371,8 +386,8 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
               onClick={() => onSelectDateAndNavigateToDay(selectedDayKey)}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition cursor-pointer shadow-xs"
             >
-              <span>מעבר לתכנון יום זה</span>
-              <ArrowLeft className="w-4 h-4" />
+              <span>Open Day Planner</span>
+              <ArrowRight className="w-4 h-4" />
             </button>
           </div>
 
@@ -380,13 +395,13 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
             {/* Day Tasks Preview */}
             <div className="p-3.5 rounded-xl bg-stone-50 border border-stone-200">
               <h4 className="font-semibold text-xs text-stone-800 mb-2 flex items-center justify-between">
-                <span>משימות ({selectedDayTasks.length})</span>
+                <span>Tasks ({selectedDayTasks.length})</span>
                 <span className="text-stone-500">
-                  {selectedDayTasks.filter((t) => t.completed).length} הושלמו
+                  {selectedDayTasks.filter((t) => t.completed).length} completed
                 </span>
               </h4>
               {selectedDayTasks.length === 0 ? (
-                <p className="text-xs text-stone-400">אין משימות מתוכננות ליום זה</p>
+                <p className="text-xs text-stone-400">No tasks scheduled for this day</p>
               ) : (
                 <ul className="space-y-1.5 text-xs text-stone-700">
                   {selectedDayTasks.slice(0, 4).map((t) => (
@@ -406,7 +421,7 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
                   ))}
                   {selectedDayTasks.length > 4 && (
                     <li className="text-[11px] text-stone-400 pt-0.5">
-                      ועוד {selectedDayTasks.length - 4} משימות...
+                      + {selectedDayTasks.length - 4} more tasks...
                     </li>
                   )}
                 </ul>
@@ -417,10 +432,10 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
             <div className="p-3.5 rounded-xl bg-stone-50 border border-stone-200">
               <h4 className="font-semibold text-xs text-stone-800 mb-2 flex items-center gap-1.5">
                 <Lightbulb className="w-3.5 h-3.5 text-amber-600" />
-                <span>רעיונות ומחשבות ({selectedDayIdeas.length})</span>
+                <span>Ideas & Reflections ({selectedDayIdeas.length})</span>
               </h4>
               {selectedDayIdeas.length === 0 ? (
-                <p className="text-xs text-stone-400">לא נכתבו רעיונות ביום זה</p>
+                <p className="text-xs text-stone-400">No thoughts recorded on this day</p>
               ) : (
                 <ul className="space-y-1.5 text-xs text-stone-700">
                   {selectedDayIdeas.slice(0, 3).map((idea) => (
@@ -436,33 +451,33 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
             <div className="p-3.5 rounded-xl bg-stone-50 border border-stone-200">
               <h4 className="font-semibold text-xs text-stone-800 mb-2 flex items-center gap-1.5">
                 <Heart className="w-3.5 h-3.5 text-rose-500" />
-                <span>מעקב אישי 🌸</span>
+                <span>Cycle & Wellness 🌸</span>
               </h4>
               {selectedDayCycle?.isPeriod ? (
                 <div className="text-xs text-rose-700 space-y-1">
                   <p className="font-semibold">
-                    יום אישי 🌸 • זרימה:{' '}
+                    Cycle Day 🌸 • Flow:{' '}
                     {selectedDayCycle.flow === 'heavy'
-                      ? 'מוגברת'
+                      ? 'Heavy'
                       : selectedDayCycle.flow === 'medium'
-                      ? 'בינונית'
+                      ? 'Medium'
                       : selectedDayCycle.flow === 'light'
-                      ? 'קלה'
-                      : 'הכתמות'}
+                      ? 'Light'
+                      : 'Spotting'}
                   </p>
                   {selectedDayCycle.symptoms.length > 0 && (
                     <p className="text-stone-500 text-[11px]">
-                      תסמינים: {selectedDayCycle.symptoms.join(', ')}
+                      Symptoms: {selectedDayCycle.symptoms.join(', ')}
                     </p>
                   )}
                 </div>
               ) : (
-                <p className="text-xs text-stone-400">אין סימון 🌸 ביום זה</p>
+                <p className="text-xs text-stone-400">No cycle entry for this day</p>
               )}
 
               {selectedDayLog?.gratitude && (
                 <div className="mt-2 pt-2 border-t border-stone-200/60 text-xs text-stone-600">
-                  <span className="font-semibold text-rose-600">הודיה:</span>{' '}
+                  <span className="font-semibold text-rose-600">Gratitude:</span>{' '}
                   <span className="italic">{selectedDayLog.gratitude}</span>
                 </div>
               )}

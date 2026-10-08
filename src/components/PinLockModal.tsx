@@ -105,8 +105,10 @@ export const PinSettingsModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
   currentPin?: string;
+  autoLockMinutes?: number;
   onSavePin: (pin: string | undefined) => void;
-}> = ({ isOpen, onClose, currentPin, onSavePin }) => {
+  onSaveAutoLockMinutes?: (minutes: number) => void;
+}> = ({ isOpen, onClose, currentPin, autoLockMinutes = 20, onSavePin, onSaveAutoLockMinutes }) => {
   const [pin, setPin] = useState(currentPin || '');
   const [confirmPin, setConfirmPin] = useState('');
   const [isChanging, setIsChanging] = useState(!currentPin);
@@ -140,16 +142,53 @@ export const PinSettingsModal: React.FC<{
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl border border-pink-200">
-        <div className="flex items-center gap-2 mb-4 pb-3 border-b border-pink-100">
+      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl border border-pink-200 space-y-4">
+        <div className="flex items-center gap-2 pb-3 border-b border-pink-100">
           <KeyRound className="w-5 h-5 text-pink-600" />
           <div>
             <h3 className="font-medium text-base text-pink-950">
-              Planner Privacy PIN
+              Planner Privacy & Lock
             </h3>
             <p className="text-xs text-pink-800/70">
-              Lock your private thoughts and planner on this computer
+              Protect your private thoughts and planner on this computer
             </p>
+          </div>
+        </div>
+
+        {/* Auto-Lock Inactivity Setting (20 minutes default) */}
+        <div className="p-3 bg-[#fff8fa] rounded-2xl border border-pink-200/90 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-pink-950 flex items-center gap-1">
+              <span>⏱️</span>
+              <span>Auto-Lock on Inactivity</span>
+            </span>
+            <span className="text-[10px] text-pink-600 font-medium bg-pink-100/70 px-2 py-0.5 rounded-full border border-pink-200">
+              {autoLockMinutes > 0 ? `${autoLockMinutes} min` : 'Disabled'}
+            </span>
+          </div>
+          <p className="text-[11px] text-pink-900/80 leading-tight">
+            If no activity is detected for the chosen duration, the planner automatically locks and returns to the cover screen with your passcode.
+          </p>
+          <div className="grid grid-cols-4 gap-1.5 pt-1">
+            {[
+              { val: 20, label: '20 min' },
+              { val: 10, label: '10 min' },
+              { val: 5, label: '5 min' },
+              { val: 0, label: 'Off' },
+            ].map((opt) => (
+              <button
+                key={opt.val}
+                type="button"
+                onClick={() => onSaveAutoLockMinutes?.(opt.val)}
+                className={`py-1.5 px-1 rounded-xl text-xs font-medium border transition cursor-pointer text-center ${
+                  autoLockMinutes === opt.val
+                    ? 'bg-pink-500 text-white border-pink-500 shadow-xs scale-[1.02]'
+                    : 'bg-white hover:bg-pink-50 border-pink-200 text-pink-950 shadow-2xs'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -170,6 +209,14 @@ export const PinSettingsModal: React.FC<{
                 className="py-2 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-medium cursor-pointer"
               >
                 Remove PIN
+              </button>
+            </div>
+            <div className="pt-2 text-center">
+              <button
+                onClick={onClose}
+                className="w-full py-2 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-xs cursor-pointer font-medium"
+              >
+                Done
               </button>
             </div>
           </div>

@@ -22,6 +22,21 @@
   </head>
   <body class="bg-[#fdf3f5] text-stone-900 antialiased selection:bg-pink-200 selection:text-pink-900 font-sans">
     <div id="root"></div>
+    <script>
+      // Clear development service worker only if explicitly requested via ?reset-sw
+      if (window.location.search.includes('reset-sw') && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for (var reg of registrations) {
+            reg.unregister();
+          }
+          if ('caches' in window) {
+            caches.keys().then(function(keys) {
+              return Promise.all(keys.map(function(k) { return caches.delete(k); }));
+            });
+          }
+        });
+      }
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

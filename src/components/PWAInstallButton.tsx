@@ -54,37 +54,59 @@ export const PWAInstallButton: React.FC = () => {
               </button>
             </div>
 
-            <div className="mt-4 space-y-3 text-xs text-stone-700 leading-relaxed text-right" dir="rtl">
+            <div className="mt-4 space-y-3 text-xs text-stone-700 leading-relaxed text-left" dir="ltr">
               <div className="p-3 bg-pink-50/80 rounded-xl border border-pink-200">
                 <p className="font-bold text-pink-950 flex items-center gap-1.5 mb-1 text-xs">
                   <Info className="w-4 h-4 text-pink-600 shrink-0" />
-                  <span>100% אופליין – ללא תלות באינטרנט!</span>
+                  <span>Why doesn't the planner open if the computer was restarted?</span>
                 </p>
                 <p className="text-[11px] text-pink-900/90 leading-relaxed">
-                  האפליקציה שומרת את כל הנתונים, המשימות והמחשבות שלך <strong>בתוך המחשב בלבד</strong>. אין שום שרת ושום ענן, וניתן לנתק את האינטרנט לחלוטין.
+                  Links starting with <code>ais-dev</code> are temporary development environments that only run while AI Studio build is active. When the computer restarts, that local process stops.
+                </p>
+                <div className="mt-2 pt-2 border-t border-pink-200/60 text-[11px] text-pink-950 font-medium">
+                  💡 <strong>The Solution:</strong> Install the planner as an independent desktop app on your computer, or use your permanent 24/7 cloud link (Shared App URL).
+                </div>
+              </div>
+
+              {/* Permanent URL box */}
+              <div className="p-3 bg-white rounded-xl border border-pink-200/90 space-y-1.5">
+                <div className="flex items-center justify-between text-xs font-semibold text-pink-950">
+                  <span>🌐 Your Permanent Link (Shared App URL - 24/7):</span>
+                </div>
+                <div className="flex items-center gap-2 p-1.5 bg-pink-50/40 rounded-lg border border-pink-100 text-[10px] font-mono text-pink-900 break-all select-all">
+                  <span>https://ais-pre-agokwkosnk7bvajfrptbx3-138158329068.europe-west1.run.app</span>
+                </div>
+                <p className="text-[10px] text-stone-500">
+                  Bookmark this link or install directly from it to launch your planner anytime with zero setup!
                 </p>
               </div>
 
-              {/* Mac Safari Instructions */}
+              {/* Mac Safari / Chrome Instructions */}
               <div className="p-3.5 bg-white rounded-xl border border-stone-200 space-y-2">
                 <div className="flex items-center gap-1.5 font-bold text-stone-900 text-xs">
                   <span>🍏</span>
-                  <span>במחשב Mac (בדפדפן Safari שבו את נמצאת כעת):</span>
+                  <span>How to install as a standalone app on Mac (Safari / Chrome):</span>
                 </div>
-                <div className="text-[11px] text-stone-700 space-y-1.5 pr-2">
-                  <p>1. בסרגל התפריטים העליון ביותר של מסך המק, לחצי על: <strong>קובץ (File)</strong>.</p>
-                  <p>2. לחצי על: <strong>הוסף ל-Dock‏ (Add to Dock...)</strong>.</p>
-                  <p>3. לחצי על <strong>הוסף (Add)</strong>.</p>
+                <div className="text-[11px] text-stone-700 space-y-1.5 pl-2">
+                  <p>1. In your Mac top menu bar, click: <strong>File</strong>.</p>
+                  <p>2. Select: <strong>Add to Dock...</strong></p>
+                  <p>3. Click <strong>Add</strong>.</p>
                   <p className="text-pink-700 font-semibold pt-1">
-                    🎀 זהו! האפליקציה תופיע ב-Dock של המק כתוכנה עצמאית עם אייקון ורוד, ותיפתח ישירות כתוכנה ללא תלות באינטרנט!
+                    🎀 That's it! A pretty pastel planner icon will appear on your Dock. From now on, open your diary with a single click as a standalone app!
                   </p>
                 </div>
               </div>
 
-              {/* In Chrome */}
+              {/* In Chrome / Windows */}
               <div className="p-2.5 bg-stone-50 rounded-xl border border-stone-200/70 space-y-1 text-[10px] text-stone-600">
-                <p className="font-semibold text-stone-800">במידה ואת פותחת דרך Google Chrome:</p>
-                <p>לחצי על תפריט 3 הנקודות ⋮ למעלה ➔ שמירה ושיתוף ➔ התקנת My Planner.</p>
+                <p className="font-semibold text-stone-800">In Google Chrome / Windows:</p>
+                <p>Click the 3 dots menu ⋮ at the top right ➔ Save and Share ➔ Install My Planner (or the computer/install icon in the address bar).</p>
+              </div>
+
+              {/* Standalone HTML File Option */}
+              <div className="p-2.5 bg-pink-50/60 rounded-xl border border-pink-200 space-y-1 text-[10px] text-pink-950">
+                <p className="font-semibold text-pink-900">💻 Want 100% Offline with Zero Servers?</p>
+                <p>Click the <strong>Backup & Offline</strong> button (hard drive icon in the top header) and choose <strong>Download Standalone Planner (.html)</strong> to get a single file that runs locally forever on your PC/Mac without internet!</p>
               </div>
             </div>
 

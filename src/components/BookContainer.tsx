@@ -10,7 +10,8 @@ import {
   Printer, 
   Sparkles,
   Bell,
-  BellOff
+  BellOff,
+  Smile
 } from 'lucide-react';
 import { BookView, AppTheme, AppSettings } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
@@ -173,30 +174,87 @@ export const BookContainer: React.FC<BookContainerProps> = ({
         </div>
       </div>
 
-      {/* The Physical Planner Spread Container */}
-      <div className="relative w-full max-w-5xl flex items-stretch">
+      {/* The Physical Planner Spread Container with Top Divider Tabs */}
+      <div className="relative w-full max-w-5xl flex flex-col items-stretch">
         
+        {/* 4 Elegant Planner Top Divider Tabs - Protruding neatly from the top edge */}
+        <nav
+          aria-label="Planner Sections Navigation"
+          className="flex items-end justify-start gap-1.5 sm:gap-2 px-4 sm:px-8 -mb-0.5 z-20 no-print select-none overflow-x-auto scrollbar-none"
+        >
+          {[
+            {
+              id: 'calendar' as BookView,
+              title: 'Monthly Calendar',
+              shortTitle: 'Calendar',
+              icon: <CalendarIcon className="w-3.5 h-3.5" />,
+            },
+            {
+              id: 'day' as BookView,
+              title: "Today's Page",
+              shortTitle: 'Today',
+              icon: <PenTool className="w-3.5 h-3.5" />,
+            },
+            {
+              id: 'ideas' as BookView,
+              title: 'Sparks & Vision Studio ✨',
+              shortTitle: 'Sparks ✨',
+              icon: <Lightbulb className="w-3.5 h-3.5 text-amber-500" />,
+            },
+            {
+              id: 'jokes-digest' as BookView,
+              title: 'Jokes & Quotes Treasury 🃏',
+              shortTitle: 'Jokes 🃏',
+              icon: <Smile className="w-3.5 h-3.5 text-amber-500" />,
+            },
+            ...(settings.enableCycleTracker
+              ? [
+                  {
+                    id: 'cycle' as BookView,
+                    title: 'Personal Tracker 🌸',
+                    shortTitle: 'Tracker 🌸',
+                    icon: <Heart className="w-3.5 h-3.5 text-pink-500" />,
+                  },
+                ]
+              : []),
+          ].map((tab) => {
+            const isActive = currentView === tab.id;
+
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => onViewChange(tab.id)}
+                className={`group px-3.5 sm:px-5 py-2 rounded-t-2xl font-serif text-xs transition-all duration-200 cursor-pointer flex items-center gap-1.5 border-t-2 border-x-2 shrink-0 ${
+                  isActive
+                    ? 'bg-gradient-to-t from-[#f8d7e0] to-[#fae1e8] text-pink-950 font-bold border-pink-300 shadow-xs z-30 translate-y-0.5'
+                    : 'bg-white/85 hover:bg-white text-pink-900/80 hover:text-pink-950 border-pink-200/70 shadow-2xs'
+                }`}
+              >
+                <span className="shrink-0 transition-transform group-hover:scale-110">
+                  {tab.icon}
+                </span>
+                <span className="hidden sm:inline tracking-wide font-medium">
+                  {tab.title}
+                </span>
+                <span className="sm:hidden tracking-wide font-medium">
+                  {tab.shortTitle}
+                </span>
+                {isActive && (
+                  <span className="text-[10px] text-pink-600 font-bold ml-0.5">
+                    ✦
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
         {/* Book Hardcover in Soft Royal Rose */}
         <div className="relative flex-1 rounded-[32px] p-3 sm:p-6 bg-gradient-to-br from-[#f8d7e0] via-[#f3c2ce] to-[#eeb0be] shadow-2xl ring-1 ring-pink-300/60 border-2 border-pink-200/90">
           
           {/* Golden stitched border around cover */}
           <div className="absolute inset-2 sm:inset-3 rounded-[26px] border border-dashed border-amber-500/30 pointer-events-none" />
-
-          {/* Silk Ribbon Bookmark */}
-          <div
-            onClick={() => onViewChange(currentView === 'calendar' ? 'day' : 'calendar')}
-            title="Ribbon Bookmark: Click to flip between Calendar and Today"
-            className="absolute top-0 right-14 sm:right-20 z-40 cursor-pointer group flex flex-col items-center no-print"
-          >
-            <div className="w-7 sm:w-8 h-16 sm:h-20 bg-gradient-to-b from-pink-600 via-rose-500 to-pink-500 shadow-md shadow-pink-500/20 transition-transform group-hover:translate-y-1 rounded-b-xs relative flex flex-col items-center pt-2">
-              {/* Vertical Ribbon Text strictly inside the ribbon */}
-              <span className="text-[9px] sm:text-[10px] font-bold text-white tracking-widest uppercase [writing-mode:vertical-rl] select-none opacity-95">
-                RIBBON 🌸
-              </span>
-              {/* Bottom ribbon chevron cutout */}
-              <div className="absolute -bottom-2 w-0 h-0 border-l-[14px] sm:border-l-[16px] border-l-transparent border-r-[14px] sm:border-r-[16px] border-r-transparent border-b-[8px] sm:border-b-[10px] border-b-transparent" />
-            </div>
-          </div>
 
           {/* INNER PAGES (Blush cream paper journal spread) */}
           <div className="relative rounded-2xl bg-[#fffbfc] shadow-inner p-4 sm:p-6 min-h-[580px] overflow-visible border border-pink-200/70">
@@ -204,95 +262,7 @@ export const BookContainer: React.FC<BookContainerProps> = ({
             {/* Center Spine Crease */}
             <div className="pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2 w-8 sm:w-12 bg-gradient-to-r from-transparent via-pink-900/[0.03] to-transparent hidden md:block" />
 
-            {/* Mobile Navigation Tabs */}
-            <div className="flex sm:hidden items-center justify-between pb-3 mb-3 border-b border-pink-100 no-print">
-              <button
-                onClick={() => onViewChange('calendar')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer ${
-                  currentView === 'calendar' ? 'bg-pink-500 text-white font-bold' : 'text-pink-900'
-                }`}
-              >
-                Calendar
-              </button>
-              <button
-                onClick={() => onViewChange('day')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer ${
-                  currentView === 'day' ? 'bg-pink-500 text-white font-bold' : 'text-pink-900'
-                }`}
-              >
-                Today
-              </button>
-              <button
-                onClick={() => onViewChange('ideas')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer ${
-                  currentView === 'ideas' ? 'bg-pink-500 text-white font-bold' : 'text-pink-900'
-                }`}
-              >
-                Journal
-              </button>
-              {settings.enableCycleTracker && (
-                <button
-                  onClick={() => onViewChange('cycle')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer ${
-                    currentView === 'cycle' ? 'bg-pink-500 text-white font-bold' : 'text-pink-900'
-                  }`}
-                >
-                  🌸
-                </button>
-              )}
-            </div>
-
-            {/* Tab Navigation on Desktop Header - Centered as requested */}
-            <div className="hidden sm:flex items-center justify-center gap-2 pb-3 mb-4 border-b border-pink-100 no-print">
-              <button
-                onClick={() => onViewChange('calendar')}
-                className={`px-4 py-2 rounded-2xl text-xs font-medium transition cursor-pointer flex items-center gap-1.5 ${
-                  currentView === 'calendar'
-                    ? 'bg-pink-500 text-white shadow-xs font-semibold scale-102 ring-2 ring-pink-300/60'
-                    : 'bg-pink-50/80 hover:bg-pink-100 text-pink-950 border border-pink-200/80'
-                }`}
-              >
-                <CalendarIcon className="w-3.5 h-3.5" />
-                <span>Monthly Calendar</span>
-              </button>
-              <button
-                onClick={() => onViewChange('day')}
-                className={`px-4 py-2 rounded-2xl text-xs font-medium transition cursor-pointer flex items-center gap-1.5 ${
-                  currentView === 'day'
-                    ? 'bg-pink-500 text-white shadow-xs font-semibold scale-102 ring-2 ring-pink-300/60'
-                    : 'bg-pink-50/80 hover:bg-pink-100 text-pink-950 border border-pink-200/80'
-                }`}
-              >
-                <PenTool className="w-3.5 h-3.5" />
-                <span>Today's Page</span>
-              </button>
-              <button
-                onClick={() => onViewChange('ideas')}
-                className={`px-4 py-2 rounded-2xl text-xs font-medium transition cursor-pointer flex items-center gap-1.5 ${
-                  currentView === 'ideas'
-                    ? 'bg-pink-500 text-white shadow-xs font-semibold scale-102 ring-2 ring-pink-300/60'
-                    : 'bg-pink-50/80 hover:bg-pink-100 text-pink-950 border border-pink-200/80'
-                }`}
-              >
-                <Lightbulb className="w-3.5 h-3.5" />
-                <span>Ideas & Journal</span>
-              </button>
-              {settings.enableCycleTracker && (
-                <button
-                  onClick={() => onViewChange('cycle')}
-                  className={`px-4 py-2 rounded-2xl text-xs font-medium transition cursor-pointer flex items-center gap-1.5 ${
-                    currentView === 'cycle'
-                      ? 'bg-pink-500 text-white shadow-xs font-semibold scale-102 ring-2 ring-pink-300/60'
-                      : 'bg-pink-50/80 hover:bg-pink-100 text-pink-950 border border-pink-200/80'
-                  }`}
-                >
-                  <Heart className="w-3.5 h-3.5 text-pink-500" />
-                  <span>Personal Tracker 🌸</span>
-                </button>
-              )}
-            </div>
-
-            {/* Child content: Day page, calendar, ideas */}
+            {/* Child content: Day page, calendar, ideas (Gains extra vertical space!) */}
             <div className="relative z-10">{children}</div>
           </div>
         </div>

@@ -6,10 +6,11 @@ import {
   Lightbulb, 
   Calendar as CalendarIcon,
   StickyNote,
-  Heart
+  Heart,
+  Smile
 } from 'lucide-react';
 import { Task, IdeaEntry, CycleDayLog, DayLog, AppSettings } from '../types';
-import { formatDateKey, parseDateKey, calculateCyclePrediction } from '../services/storage';
+import { formatDateKey, parseDateKey, calculateCyclePrediction, parseEventItem, getEventStringsForDate } from '../services/storage';
 import { getHebrewDateInfo } from '../services/hebrewCalendar';
 
 interface MonthlyBookSpreadProps {
@@ -20,6 +21,7 @@ interface MonthlyBookSpreadProps {
   settings: AppSettings;
   onSelectDay: (dateStr: string) => void;
   onUpdateMonthlyNote?: (yearMonth: string, note: string) => void;
+  onOpenJokesDigest?: () => void;
   selectedDate: string;
 }
 
@@ -47,6 +49,7 @@ export const MonthlyBookSpread: React.FC<MonthlyBookSpreadProps> = ({
   settings,
   onSelectDay,
   onUpdateMonthlyNote,
+  onOpenJokesDigest,
   selectedDate,
 }) => {
   const initialDate = parseDateKey(selectedDate);
@@ -169,7 +172,7 @@ export const MonthlyBookSpread: React.FC<MonthlyBookSpreadProps> = ({
               </div>
               {/* Hebrew month and year preserved in Hebrew */}
               <p className="text-xs text-pink-700/80 mt-0.5">
-                חודש {midHebrew.hebrewMonthName} {midHebrew.hebrewYearLetter}
+                Hebrew Month: {midHebrew.hebrewMonthName} {midHebrew.hebrewYearLetter}
               </p>
             </div>
 
@@ -184,7 +187,19 @@ export const MonthlyBookSpread: React.FC<MonthlyBookSpreadProps> = ({
         </div>
 
         {/* Action Controls & Legend */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
+          {onOpenJokesDigest && (
+            <button
+              onClick={onOpenJokesDigest}
+              className="px-3 py-1.5 rounded-full bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200/90 text-xs font-medium transition cursor-pointer flex items-center gap-1.5 shadow-2xs hover:scale-102"
+              title="View Monthly & Annual Hebrew Jokes Summary"
+            >
+              <Smile className="w-3.5 h-3.5 text-amber-600" />
+              <span className="hidden sm:inline">Jokes Digest (סיכום בדיחות)</span>
+              <span className="sm:hidden">Jokes 🃏</span>
+            </button>
+          )}
+
           <button
             onClick={handleJumpToToday}
             className="px-3.5 py-1.5 rounded-full bg-gradient-to-r from-pink-400 via-rose-300 to-pink-400 text-white text-xs font-medium transition cursor-pointer flex items-center gap-1.5 shadow-xs hover:scale-102"
@@ -240,7 +255,7 @@ export const MonthlyBookSpread: React.FC<MonthlyBookSpreadProps> = ({
           const completedCount = dayTasks.filter((t) => t.completed).length;
           const dayIdeas = ideas.filter((i) => i.date === cell.key);
           const hasIdeas = dayIdeas.length > 0;
-          const dayEvents = dayLogs[cell.key]?.importantEvents || [];
+          const dayEvents = getEventStringsForDate(cell.key, dayLogs);
           const cycleLog = cycleLogs[cell.key];
           const isFlower = cycleLog?.isPeriod;
 
@@ -312,16 +327,23 @@ export const MonthlyBookSpread: React.FC<MonthlyBookSpreadProps> = ({
                 {/* Important Events (Chic Planner Washi Ribbon Tags) */}
                 {dayEvents.length > 0 && (
                   <div className="space-y-0.5 w-full">
-                    {dayEvents.slice(0, 2).map((evt, idx) => (
-                      <div
-                        key={idx}
-                        title={evt}
-                        className="group/tag relative flex items-start gap-1 text-[9px] sm:text-[9.5px] px-1.5 py-0.5 rounded-md font-medium bg-[#fff3f6] hover:bg-[#ffeaf0] text-pink-950 border-l-[3px] border-l-pink-400 border-y border-r border-pink-200/70 shadow-2xs transition-all leading-tight break-words text-left w-full overflow-hidden"
-                      >
-                        <span className="text-[9px] text-pink-500 shrink-0 mt-0.5 select-none font-bold">✦</span>
-                        <span className="break-words leading-tight flex-1 line-clamp-2">{evt}</span>
-                      </div>
-                    ))}
+                    {dayEvents.slice(0, 2).map((evt, idx) => {
+                      const parsed = parseEventItem(evt);
+                      return (
+                        <div
+                          key={idx}
+                          title={evt}
+                          className="group/tag relative flex items-start gap-1 text-[9px] sm:text-[9.5px] px-1.5 py-0.5 rounded-md font-medium bg-[#fff3f6] hover:bg-[#ffeaf0] text-pink-950 border-l-[3px] border-l-pink-400 border-y border-r border-pink-200/70 shadow-2xs transition-all leading-tight break-words text-left w-full overflow-hidden"
+                        >
+                          <span className="text-[10px] shrink-0 mt-0.5 select-none leading-none">
+                            {parsed.icon}
+                          </span>
+                          <span className="break-words leading-tight flex-1 line-clamp-2">
+                            {parsed.title}
+                          </span>
+                        </div>
+                      );
+                    })}
                     {dayEvents.length > 2 && (
                       <span className="text-[8.5px] text-pink-600 font-semibold block text-right px-1 leading-none">
                         +{dayEvents.length - 2} more

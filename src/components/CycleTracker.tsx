@@ -17,7 +17,7 @@ import {
   FileText
 } from 'lucide-react';
 import { CycleDayLog, FlowLevel, CycleSymptom, AppSettings } from '../types';
-import { formatDateKey, formatHebrewDateString, parseDateKey, calculateCyclePrediction } from '../services/storage';
+import { formatDateKey, parseDateKey, calculateCyclePrediction } from '../services/storage';
 import { getHebrewDateInfo } from '../services/hebrewCalendar';
 
 interface CycleTrackerProps {
@@ -36,15 +36,15 @@ const FLOW_LEVELS: { id: FlowLevel; label: string; icon: string; description: st
   { id: 'spotting', label: 'Spotting', icon: '🌸', description: 'Minimal spotting' },
 ];
 
-const SYMPTOMS: { id: CycleSymptom; label: string; icon: string }[] = [
-  { id: 'התכווצויות', label: 'Cramps', icon: '⚡' },
-  { id: 'עייפות', label: 'Fatigue', icon: '💤' },
-  { id: 'נפיחות', label: 'Bloating', icon: '☁️' },
-  { id: 'פצעונים', label: 'Acne', icon: '🌸' },
-  { id: 'כאב ראש', label: 'Headache', icon: '💆‍♀️' },
-  { id: 'כאבי גב', label: 'Back Pain', icon: '🦴' },
-  { id: 'מצב רוח תנודתי', label: 'Mood Swings', icon: '🎭' },
-  { id: 'חשקים למתוק', label: 'Cravings', icon: '🍫' },
+const SYMPTOMS: { id: CycleSymptom; legacyId?: string; label: string; icon: string }[] = [
+  { id: 'Cramps', legacyId: 'התכווצויות', label: 'Cramps', icon: '⚡' },
+  { id: 'Fatigue', legacyId: 'עייפות', label: 'Fatigue', icon: '💤' },
+  { id: 'Bloating', legacyId: 'נפיחות', label: 'Bloating', icon: '☁️' },
+  { id: 'Acne', legacyId: 'פצעונים', label: 'Acne', icon: '🌸' },
+  { id: 'Headache', legacyId: 'כאב ראש', label: 'Headache', icon: '💆‍♀️' },
+  { id: 'Backache', legacyId: 'כאבי גב', label: 'Back Pain', icon: '🦴' },
+  { id: 'Mood Swings', legacyId: 'מצב רוח תנודתי', label: 'Mood Swings', icon: '🎭' },
+  { id: 'Cravings', legacyId: 'חשקים למתוק', label: 'Cravings', icon: '🍫' },
 ];
 
 const SELF_CARE_PLAN = [
@@ -127,9 +127,10 @@ export const CycleTracker: React.FC<CycleTrackerProps> = ({
 
   const handleToggleSymptom = (symId: CycleSymptom) => {
     const currentSymptoms = currentLog.symptoms || [];
-    const exists = currentSymptoms.includes(symId);
+    const symDef = SYMPTOMS.find((s) => s.id === symId);
+    const exists = currentSymptoms.some((s) => s === symId || (symDef?.legacyId && s === symDef.legacyId));
     const next = exists
-      ? currentSymptoms.filter((s) => s !== symId)
+      ? currentSymptoms.filter((s) => s !== symId && s !== symDef?.legacyId)
       : [...currentSymptoms, symId];
 
     onUpdateCycleLog(selectedDate, {
@@ -486,7 +487,9 @@ export const CycleTracker: React.FC<CycleTrackerProps> = ({
 
             <div className="grid grid-cols-2 gap-1.5">
               {SYMPTOMS.map((sym) => {
-                const active = (currentLog.symptoms || []).includes(sym.id);
+                const active = (currentLog.symptoms || []).some(
+                  (s) => s === sym.id || (sym.legacyId && s === sym.legacyId)
+                );
                 return (
                   <button
                     key={sym.id}

@@ -1,4 +1,5 @@
-import { JournalDatabase, Task, IdeaEntry, IdeaCategory, CycleDayLog, DayLog, Habit, AppSettings } from '../types';
+import { JournalDatabase, Task, IdeaEntry, IdeaCategory, CycleDayLog, DayLog, Habit, AppSettings, EventRecurrence } from '../types';
+import { isSameHebrewDayAndMonth } from './hebrewCalendar';
 
 const STORAGE_KEY = 'offline_personal_journal_v1';
 
@@ -15,24 +16,163 @@ export function parseDateKey(dateStr: string): Date {
   return new Date(y, m - 1, d);
 }
 
+export function formatEnglishDateString(dateStr: string): string {
+  const date = parseDateKey(dateStr);
+  return date.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
 export function formatHebrewDateString(dateStr: string): string {
   const date = parseDateKey(dateStr);
-  const daysOfWeek = ['יום ראשון', 'יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'יום שבת'];
-  const months = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
-  
-  const dayName = daysOfWeek[date.getDay()];
-  const dayNum = date.getDate();
-  const monthName = months[date.getMonth()];
-  const year = date.getFullYear();
+  return date.toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+}
 
-  return `${dayName}, ${dayNum} ב${monthName} ${year}`;
+export interface ParsedEventItem {
+  icon: string;
+  title: string;
+  recurrence: EventRecurrence;
+  originalDate?: string;
+  raw: string;
+}
+
+export function formatEventItem(
+  icon: string,
+  title: string,
+  recurrence: EventRecurrence = 'none',
+  originalDate?: string
+): string {
+  const cleanTitle = title.replace(/\s*@@repeat:[^ ]+/g, '').trim();
+  if (recurrence && recurrence !== 'none') {
+    const dateSuffix = originalDate ? `@${originalDate}` : '';
+    return `${icon} ${cleanTitle} @@repeat:${recurrence}${dateSuffix}`;
+  }
+  return `${icon} ${cleanTitle}`;
+}
+
+// Helper to extract event icon, clean title and recurrence from raw event string
+export function parseEventItem(raw: string): ParsedEventItem {
+  if (!raw) return { icon: '✦', title: '', recurrence: 'none', raw: '' };
+
+  let working = raw.trim();
+  let recurrence: EventRecurrence = 'none';
+  let originalDate: string | undefined = undefined;
+
+  // Extract recurrence tag if present: e.g. @@repeat:yearly-gregorian@2026-10-15
+  const repeatRegex = /\s*@@repeat:(yearly-gregorian|yearly-hebrew)(?:@(\d{4}-\d{2}-\d{2}))?$/;
+  const repeatMatch = working.match(repeatRegex);
+  if (repeatMatch) {
+    recurrence = repeatMatch[1] as EventRecurrence;
+    originalDate = repeatMatch[2];
+    working = working.slice(0, repeatMatch.index).trim();
+  }
+
+  // 1. Leading emoji: e.g. "🎂 Maya's Birthday" or "✈️ Flight"
+  const leadingEmojiRegex = /^([\p{Extended_Pictographic}\u200D\uFE0F\u20E3\uD83C\uDFFB-\uD83C\uDFFF]+)\s*/u;
+  const leadMatch = working.match(leadingEmojiRegex);
+  if (leadMatch) {
+    const icon = leadMatch[1];
+    const title = working.slice(leadMatch[0].length).trim();
+    return { icon, title: title || working, recurrence, originalDate, raw };
+  }
+
+  // 2. Trailing emoji: e.g. "Maya's Birthday 🎂" or "Dentist 14:00 🦷"
+  const trailingEmojiRegex = /\s*([\p{Extended_Pictographic}\u200D\uFE0F\u20E3\uD83C\uDFFB-\uD83C\uDFFF]+)$/u;
+  const trailMatch = working.match(trailingEmojiRegex);
+  if (trailMatch && trailMatch.index !== undefined) {
+    const icon = trailMatch[1];
+    const title = working.slice(0, trailMatch.index).trim();
+    return { icon, title: title || working, recurrence, originalDate, raw };
+  }
+
+  return { icon: '✦', title: working, recurrence, originalDate, raw };
+}
+
+export interface DayEventItem {
+  evt: string;
+  parsed: ParsedEventItem;
+  isRecurringInstance: boolean;
+  originalDate: string;
+}
+
+export function getEventsForDate(
+  targetDateKey: string,
+  dayLogs: Record<string, DayLog>
+): DayEventItem[] {
+  if (!dayLogs) return [];
+  const result: DayEventItem[] = [];
+  const directEvents = dayLogs[targetDateKey]?.importantEvents || [];
+
+  for (const raw of directEvents) {
+    const parsed = parseEventItem(raw);
+    result.push({
+      evt: raw,
+      parsed,
+      isRecurringInstance: false,
+      originalDate: parsed.originalDate || targetDateKey,
+    });
+  }
+
+  // Check recurring events from other dates
+  const targetDate = parseDateKey(targetDateKey);
+  const targetMonthDay = targetDateKey.slice(5); // "MM-DD"
+
+  for (const [sourceDateKey, log] of Object.entries(dayLogs)) {
+    if (sourceDateKey === targetDateKey) continue;
+    const events = log?.importantEvents || [];
+    for (const raw of events) {
+      const parsed = parseEventItem(raw);
+      if (parsed.recurrence === 'yearly-gregorian') {
+        const sourceMonthDay = (parsed.originalDate || sourceDateKey).slice(5);
+        if (sourceMonthDay === targetMonthDay) {
+          if (!result.some((r) => r.parsed.title === parsed.title && r.parsed.icon === parsed.icon)) {
+            result.push({
+              evt: raw,
+              parsed,
+              isRecurringInstance: true,
+              originalDate: parsed.originalDate || sourceDateKey,
+            });
+          }
+        }
+      } else if (parsed.recurrence === 'yearly-hebrew') {
+        const sourceDate = parseDateKey(parsed.originalDate || sourceDateKey);
+        if (isSameHebrewDayAndMonth(sourceDate, targetDate)) {
+          if (!result.some((r) => r.parsed.title === parsed.title && r.parsed.icon === parsed.icon)) {
+            result.push({
+              evt: raw,
+              parsed,
+              isRecurringInstance: true,
+              originalDate: parsed.originalDate || sourceDateKey,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  return result;
+}
+
+export function getEventStringsForDate(
+  targetDateKey: string,
+  dayLogs: Record<string, DayLog>
+): string[] {
+  return getEventsForDate(targetDateKey, dayLogs).map((item) => item.evt);
 }
 
 const defaultHabits: Habit[] = [
-  { id: 'water', name: 'שתיית מים', icon: '💧', targetPerDay: 8, unit: 'כוסות' },
-  { id: 'reading', name: 'קריאת ספר/למידה', icon: '📖', targetPerDay: 1, unit: 'פרק/זמן' },
-  { id: 'walk', name: 'הליכה / תנועה', icon: '👟', targetPerDay: 1, unit: 'אימון' },
-  { id: 'mindfulness', name: 'רגע של שקט / נשימה', icon: '✨', targetPerDay: 1, unit: 'פעמים' },
+  { id: 'water', name: 'Water Intake', icon: '💧', targetPerDay: 8, unit: 'glasses' },
+  { id: 'reading', name: 'Reading & Learning', icon: '📖', targetPerDay: 1, unit: 'chapter/time' },
+  { id: 'walk', name: 'Gentle Walk & Movement', icon: '👟', targetPerDay: 1, unit: 'walk' },
+  { id: 'mindfulness', name: 'Mindfulness & Breathing', icon: '✨', targetPerDay: 1, unit: 'session' },
 ];
 
 const defaultSettings: AppSettings = {
@@ -42,6 +182,7 @@ const defaultSettings: AppSettings = {
   averageCycleLength: 28,
   averagePeriodLength: 5,
   isPinLocked: false,
+  autoLockMinutes: 20,
   userDisplayName: 'My Daily Planner',
   soundAlertsEnabled: true,
 };
@@ -57,7 +198,7 @@ function createInitialDatabase(): JournalDatabase {
       title: "Review today's top priorities & goals",
       completed: true,
       priority: 'high',
-      category: 'אישי',
+      category: 'Personal',
       time: '09:00',
       createdAt: Date.now() - 3600000,
     },
@@ -67,7 +208,7 @@ function createInitialDatabase(): JournalDatabase {
       title: 'Hydrate & drink fresh water throughout the day',
       completed: false,
       priority: 'high',
-      category: 'אישי',
+      category: 'Personal',
       time: '11:00',
       createdAt: Date.now() - 2400000,
     },
@@ -77,7 +218,7 @@ function createInitialDatabase(): JournalDatabase {
       title: 'Take a gentle 15-minute stretch or walk',
       completed: false,
       priority: 'medium',
-      category: 'בריאות',
+      category: 'Health',
       time: '14:00',
       createdAt: Date.now() - 1200000,
     },
@@ -87,7 +228,7 @@ function createInitialDatabase(): JournalDatabase {
       title: 'Read an inspiring chapter & unwind before bed',
       completed: false,
       priority: 'low',
-      category: 'אישי',
+      category: 'Personal',
       createdAt: Date.now() - 600000,
     },
   ];
@@ -150,8 +291,8 @@ function createInitialDatabase(): JournalDatabase {
       date: key,
       isPeriod: true,
       flow: i === 0 ? 'light' : i < 3 ? 'heavy' : i === 3 ? 'medium' : 'spotting',
-      symptoms: i === 1 ? ['התכווצויות', 'עייפות'] : ['רגישות בחזה'],
-      notes: i === 1 ? 'יום ראשון חזק, מנוחה עם כרית חמה' : '',
+      symptoms: i === 1 ? ['Cramps', 'Fatigue'] : ['Tender'],
+      notes: i === 1 ? 'Gentle first day, resting with a cozy hot water bottle' : '',
     };
   }
 
@@ -171,7 +312,8 @@ export function loadJournalDatabase(): JournalDatabase {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      const initial = createInitialDatabase();
+      const embedded = (window as unknown as { __STANDALONE_EMBEDDED_DATA__?: JournalDatabase }).__STANDALONE_EMBEDDED_DATA__;
+      const initial = embedded || createInitialDatabase();
       saveJournalDatabase(initial);
       return initial;
     }
@@ -257,6 +399,40 @@ export function exportToJsonFile(db: JournalDatabase): void {
   URL.revokeObjectURL(url);
 }
 
+export async function exportStandaloneHtmlFile(db: JournalDatabase): Promise<void> {
+  let template = '';
+  try {
+    const res = await fetch('/standalone-planner.html');
+    if (res.ok) {
+      template = await res.text();
+    }
+  } catch (err) {
+    console.warn('Could not fetch /standalone-planner.html', err);
+  }
+
+  if (!template) {
+    throw new Error('Standalone template is currently preparing. Please try again in a moment or use the JSON backup file.');
+  }
+
+  // Embed database into template
+  const embeddedDataStr = JSON.stringify(db).replace(/<\/script>/gi, '<\\/script>');
+  const injectedScript = `<script>window.__STANDALONE_EMBEDDED_DATA__ = ${embeddedDataStr};</script>`;
+
+  const finalHtml = template.replace('</head>', `${injectedScript}</head>`);
+
+  const blob = new Blob([finalHtml], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const dateStr = formatDateKey(new Date());
+
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `My_Planner_Standalone_${dateStr}.html`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 export function importFromJsonFile(file: File): Promise<JournalDatabase> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -265,18 +441,18 @@ export function importFromJsonFile(file: File): Promise<JournalDatabase> {
         const text = e.target?.result as string;
         const parsed = JSON.parse(text);
         if (!parsed || typeof parsed !== 'object') {
-          throw new Error('קובץ לא תקין');
+          throw new Error('Invalid backup file');
         }
         // Minimal integrity check
         if (!Array.isArray(parsed.tasks) && !Array.isArray(parsed.ideas)) {
-          throw new Error('מבנה קובץ היומן אינו מזוהה');
+          throw new Error('Unrecognized journal backup structure');
         }
         resolve(parsed as JournalDatabase);
       } catch (err) {
         reject(err);
       }
     };
-    reader.onerror = () => reject(new Error('שגיאה בקריאת הקובץ מהמחשב'));
+    reader.onerror = () => reject(new Error('Failed to read file from computer'));
     reader.readAsText(file);
   });
 }
