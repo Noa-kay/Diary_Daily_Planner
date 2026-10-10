@@ -11,7 +11,9 @@ import {
   Sparkles,
   Bell,
   BellOff,
-  Smile
+  Smile,
+  LifeBuoy,
+  Settings
 } from 'lucide-react';
 import { BookView, AppTheme, AppSettings } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
@@ -25,8 +27,10 @@ interface BookContainerProps {
   onViewChange: (view: BookView) => void;
   settings: AppSettings;
   onUpdateTheme: (theme: AppTheme) => void;
-  openBackupModal: () => void;
-  openPinModal: () => void;
+  openSettingsModal: () => void;
+  openBackupModal?: () => void;
+  openRecoveryModal?: () => void;
+  openPinModal?: () => void;
   onToggleLock: () => void;
   hasTasksToday: boolean;
   onShowCover?: () => void;
@@ -49,7 +53,9 @@ export const BookContainer: React.FC<BookContainerProps> = ({
   onViewChange,
   settings,
   onUpdateTheme,
+  openSettingsModal,
   openBackupModal,
+  openRecoveryModal,
   openPinModal,
   onToggleLock,
   hasTasksToday,
@@ -72,7 +78,7 @@ export const BookContainer: React.FC<BookContainerProps> = ({
             <span className="text-base">🌸</span>
           </div>
           <div>
-            <span className="font-medium text-pink-950 text-sm hidden sm:inline flex items-center gap-1">
+            <span className="font-bold text-pink-950 text-sm hidden sm:inline flex items-center gap-1">
               <span>My Planner</span>
               <Sparkles className="w-3 h-3 text-pink-400 inline" />
             </span>
@@ -80,96 +86,38 @@ export const BookContainer: React.FC<BookContainerProps> = ({
           <OfflineIndicator />
         </div>
 
-        {/* Right: Desk Controls & PWA Install */}
-        <div className="flex items-center gap-2">
-          {/* Daily Affirmation Sparkle Button */}
+        {/* Right: Desk Controls - Icon-only buttons (Inspiration, Cover, Settings rightmost) */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* 1. Daily Affirmation Sparkle Button */}
           <button
             onClick={() => setShowAffirmation(true)}
-            className="p-1.5 px-2.5 rounded-xl bg-gradient-to-r from-pink-100 to-rose-100 hover:from-pink-200 hover:to-rose-200 text-pink-900 text-xs font-medium transition cursor-pointer flex items-center gap-1.5 border border-pink-200/80 shadow-2xs"
-            title="Daily Positive Affirmation & Inspiration"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-r from-pink-100 to-rose-100 hover:from-pink-200 hover:to-rose-200 text-pink-900 transition cursor-pointer flex items-center justify-center border border-pink-200/80 shadow-2xs"
+            title="Daily Inspiration"
+            aria-label="Daily Inspiration"
           >
-            <Sparkles className="w-3.5 h-3.5 text-pink-500 animate-spin duration-3000" />
-            <span className="hidden sm:inline">Affirmation</span>
+            <Sparkles className="w-4 h-4 text-pink-500 animate-spin duration-3000" />
           </button>
 
+          {/* 2. Close Book to Cover Button */}
           {onShowCover && (
             <button
               onClick={onShowCover}
-              className="p-1.5 px-2.5 rounded-xl bg-pink-100/70 hover:bg-pink-100 text-pink-950 text-xs font-medium transition cursor-pointer flex items-center gap-1 border border-pink-200"
-              title="Close planner and view book cover"
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-pink-100/70 hover:bg-pink-100 text-pink-950 transition cursor-pointer flex items-center justify-center border border-pink-200 shadow-2xs"
+              title="Close to Book Cover"
+              aria-label="Close to Book Cover"
             >
-              <span>📖</span>
-              <span className="hidden sm:inline">Cover</span>
+              <span className="text-sm">📖</span>
             </button>
           )}
 
-          {/* Only shown in browser before installing to computer */}
-          {!isInstalled && <PWAInstallButton />}
-
-          {/* Backup to file button - hidden on installed desktop app as requested */}
-          {!isInstalled && (
-            <button
-              onClick={openBackupModal}
-              className="p-1.5 px-2 rounded-xl bg-pink-100/60 hover:bg-pink-100 text-pink-900 text-xs font-medium transition cursor-pointer flex items-center gap-1 border border-pink-200/60"
-              title="Backup to local file / Restore"
-            >
-              <HardDrive className="w-3.5 h-3.5 text-pink-700" />
-              <span className="hidden md:inline">Backup</span>
-            </button>
-          )}
-
-          {/* Sound Alert Toggle with Test Option */}
-          {onToggleSoundAlerts && (
-            <button
-              onClick={onToggleSoundAlerts}
-              className={`p-1.5 px-2.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 border shadow-2xs ${
-                soundAlertsEnabled
-                  ? 'text-rose-900 bg-gradient-to-r from-rose-100 to-pink-100 hover:from-rose-200 hover:to-pink-200 border-rose-300'
-                  : 'text-stone-400 bg-stone-100/70 hover:bg-stone-200/70 border-stone-200'
-              }`}
-              title={
-                soundAlertsEnabled
-                  ? 'Chime Reminders ON (Gentle audio alert for upcoming tasks/events). Click to mute.'
-                  : 'Chime Reminders MUTED. Click to turn ON.'
-              }
-            >
-              {soundAlertsEnabled ? (
-                <Bell className="w-3.5 h-3.5 text-rose-600 fill-rose-300" />
-              ) : (
-                <BellOff className="w-3.5 h-3.5 text-stone-400" />
-              )}
-              <span className="hidden md:inline text-xs font-medium">
-                {soundAlertsEnabled ? 'Chime ON' : 'Muted'}
-              </span>
-            </button>
-          )}
-
-          {/* Print button */}
+          {/* 3. Settings Button (Rightmost!) */}
           <button
-            onClick={() => window.print()}
-            className="p-1.5 rounded-xl bg-pink-100/60 hover:bg-pink-100 text-pink-900 transition cursor-pointer hidden sm:flex border border-pink-200/60"
-            title="Print this page"
+            onClick={openSettingsModal}
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-r from-pink-100/90 to-rose-100/80 hover:from-pink-200 hover:to-rose-200 text-pink-950 transition cursor-pointer flex items-center justify-center border border-pink-200 shadow-2xs"
+            title="Settings"
+            aria-label="Settings"
           >
-            <Printer className="w-3.5 h-3.5 text-pink-700" />
-          </button>
-
-          {/* PIN Lock */}
-          <button
-            onClick={() => {
-              if (settings.pinCode) {
-                onToggleLock();
-              } else {
-                openPinModal();
-              }
-            }}
-            className={`p-1.5 rounded-xl transition cursor-pointer border ${
-              settings.pinCode
-                ? 'text-pink-600 bg-pink-50 hover:bg-pink-100 border-pink-300'
-                : 'text-stone-400 hover:text-stone-700 bg-white border-stone-200'
-            }`}
-            title={settings.pinCode ? 'Lock planner with PIN' : 'Set privacy PIN code'}
-          >
-            {settings.pinCode ? <Lock className="w-3.5 h-3.5 text-pink-600" /> : <Unlock className="w-3.5 h-3.5" />}
+            <Settings className="w-4 h-4 text-pink-600" />
           </button>
         </div>
       </div>

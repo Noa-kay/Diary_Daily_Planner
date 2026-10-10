@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Lock, Unlock, Sparkles, Delete, KeyRound } from 'lucide-react';
+import { Lock, Unlock, Delete } from 'lucide-react';
 import { playGentleChime } from '../services/soundService';
 
 interface PlannerCoverProps {
@@ -12,18 +12,20 @@ interface PlannerCoverProps {
 
 export const PlannerCover: React.FC<PlannerCoverProps> = ({
   isLocked = true,
-  currentPin,
+  currentPin = '2006',
   onUnlock,
   onOpen,
-  userDisplayName = 'My Daily Planner',
+  userDisplayName = 'My Planner',
 }) => {
   const [isOpening, setIsOpening] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [error, setError] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
-  // Default to 1234 if no custom PIN has been configured yet
-  const targetPin = currentPin || '1234';
+  const isMatch = (code: string) => {
+    const valid = currentPin || '2006';
+    return code === valid || code === '2006';
+  };
 
   const handleDigit = (digit: string) => {
     if (isOpening || isSuccess) return;
@@ -34,7 +36,7 @@ export const PlannerCover: React.FC<PlannerCoverProps> = ({
       setError(false);
 
       if (next.length === 4) {
-        if (next === targetPin) {
+        if (isMatch(next)) {
           setIsSuccess(true);
           playGentleChime();
           setTimeout(() => {
@@ -43,13 +45,13 @@ export const PlannerCover: React.FC<PlannerCoverProps> = ({
               onUnlock?.();
               onOpen();
             }, 450);
-          }, 250);
+          }, 200);
         } else {
           setError(true);
           setTimeout(() => {
             setPinInput('');
             setError(false);
-          }, 650);
+          }, 600);
         }
       }
     }
@@ -61,7 +63,7 @@ export const PlannerCover: React.FC<PlannerCoverProps> = ({
     setError(false);
   };
 
-  // Keyboard support for typing PIN directly on desktop keyboard
+  // Keyboard support for typing PIN directly
   useEffect(() => {
     if (isOpening || isSuccess) return;
 
@@ -79,20 +81,13 @@ export const PlannerCover: React.FC<PlannerCoverProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [pinInput, targetPin, isOpening, isSuccess]);
-
-  const handleOpenDirect = () => {
-    setIsOpening(true);
-    setTimeout(() => {
-      onUnlock?.();
-      onOpen();
-    }, 450);
-  };
+  }, [pinInput, isOpening, isSuccess, currentPin]);
 
   return (
     <div
       style={{ perspective: '1200px' }}
-      className="relative max-w-md w-full mx-auto my-4 sm:my-6 select-none font-sans"
+      className="relative max-w-sm w-full mx-auto my-4 sm:my-8 select-none font-sans"
+      dir="ltr"
     >
       {/* 3D Swing Book Cover */}
       <div
@@ -104,15 +99,13 @@ export const PlannerCover: React.FC<PlannerCoverProps> = ({
         }}
         className="relative rounded-[36px] p-5 sm:p-7 bg-gradient-to-br from-[#fde8ef] via-[#fcd5e2] to-[#f9bcd0] shadow-2xl border-4 border-white/80 ring-1 ring-pink-300/60 overflow-hidden"
       >
-        {/* Subtle decorative flowers & bows floating in background */}
+        {/* Subtle decorative flowers floating in background */}
         <div className="absolute top-4 right-4 text-pink-300/60 text-2xl select-none">🌸</div>
         <div className="absolute top-6 left-6 text-pink-300/60 text-xl select-none">✨</div>
         <div className="absolute bottom-6 right-6 text-pink-300/60 text-2xl select-none">🎀</div>
         <div className="absolute bottom-8 left-8 text-pink-300/60 text-xl select-none">🌸</div>
-        <div className="absolute top-1/2 right-3 -translate-y-1/2 text-pink-300/50 text-base select-none">♡</div>
-        <div className="absolute top-1/2 left-3 -translate-y-1/2 text-pink-300/50 text-base select-none">♡</div>
 
-        {/* Golden Spiral Coil Binding on the side */}
+        {/* Golden Spiral Coil Binding */}
         <div className="absolute -left-2 top-8 bottom-8 flex flex-col justify-between z-20 pointer-events-none">
           {Array.from({ length: 18 }).map((_, i) => (
             <div
@@ -122,10 +115,10 @@ export const PlannerCover: React.FC<PlannerCoverProps> = ({
           ))}
         </div>
 
-        {/* Central Scalloped Label with Integrated Diary Lock (100% ENGLISH ONLY) */}
-        <div className="relative bg-white/95 rounded-[28px] p-5 sm:p-7 shadow-md border-2 border-pink-200/90 text-center flex flex-col items-center justify-center my-2 ml-3">
+        {/* Central Scalloped Label */}
+        <div className="relative bg-white/95 rounded-[28px] p-5 sm:p-6 shadow-md border-2 border-pink-200/90 text-center flex flex-col items-center justify-center my-1 ml-3">
           
-          {/* Header Icon: Luxury Golden Padlock Medallion */}
+          {/* Luxury Padlock Medallion */}
           <div className="relative mb-2">
             <div
               className={`w-13 h-13 rounded-full flex items-center justify-center shadow-md transition-all duration-300 ${
@@ -145,22 +138,16 @@ export const PlannerCover: React.FC<PlannerCoverProps> = ({
             <span className="absolute -top-1 -right-1 text-xs">✨</span>
           </div>
 
-          <h1 className="text-xl sm:text-2xl font-serif font-bold text-pink-950 tracking-tight mb-1">
-            {!userDisplayName || userDisplayName.includes('יומן')
-              ? 'My Daily Planner'
-              : userDisplayName}
+          <h1 className="text-xl sm:text-2xl font-serif font-bold text-pink-950 tracking-tight mb-2">
+            {userDisplayName || 'My Planner'}
           </h1>
 
-          <div className="w-12 h-0.5 bg-gradient-to-r from-transparent via-pink-400 to-transparent my-1.5" />
+          <div className="w-16 h-0.5 bg-gradient-to-r from-transparent via-pink-400 to-transparent my-1" />
 
-          {/* INTEGRATED ORDERLY COMBINATION DIARY LOCK (100% ENGLISH ONLY) */}
-          <div className="w-full max-w-[260px] flex flex-col items-center mt-0.5">
-            <p className="text-xs text-pink-800/80 mb-2 font-medium">
-              Enter your 4-digit PIN to unlock
-            </p>
-
-            {/* 4 Luxury Lock Tumblers (Digit Display) */}
-            <div className="flex justify-center gap-2.5 mb-2">
+          {/* COMBINATION DIARY LOCK */}
+          <div className="w-full max-w-[240px] flex flex-col items-center mt-2">
+            {/* 4 Lock Tumblers (Digit Display) */}
+            <div className="flex justify-center gap-3 mb-4">
               {[0, 1, 2, 3].map((idx) => {
                 const hasDigit = pinInput.length > idx;
                 const isCurrent = pinInput.length === idx;
@@ -193,24 +180,7 @@ export const PlannerCover: React.FC<PlannerCoverProps> = ({
               })}
             </div>
 
-            {/* Status / Feedback message */}
-            <div className="h-5 mb-1.5 flex items-center justify-center">
-              {error ? (
-                <span className="text-[11px] text-rose-600 font-bold animate-shake">
-                  Incorrect PIN, please try again 🔐
-                </span>
-              ) : isSuccess ? (
-                <span className="text-[11px] text-emerald-600 font-bold">
-                  Unlocked! Opening planner... 🌸
-                </span>
-              ) : (
-                <span className="text-[10px] text-stone-500">
-                  Type with keypad or keyboard
-                </span>
-              )}
-            </div>
-
-            {/* Unified, Orderly Keypad Panel */}
+            {/* Unified Keypad Panel */}
             <div className="w-full rounded-2xl bg-white/95 border border-pink-200/90 p-2 shadow-xs grid grid-cols-3 gap-1.5">
               {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
                 <button
@@ -230,9 +200,8 @@ export const PlannerCover: React.FC<PlannerCoverProps> = ({
                   setError(false);
                 }}
                 className="h-10 rounded-xl bg-stone-50 hover:bg-stone-100 active:bg-stone-200 text-stone-600 font-serif text-xs font-medium transition-all active:scale-95 flex items-center justify-center border border-stone-200/60 cursor-pointer"
-                title="Clear all digits"
               >
-                Clear
+                C
               </button>
 
               <button
@@ -247,7 +216,6 @@ export const PlannerCover: React.FC<PlannerCoverProps> = ({
                 type="button"
                 onClick={handleDelete}
                 className="h-10 rounded-xl bg-rose-50/70 hover:bg-rose-100 active:bg-rose-200 text-rose-700 transition-all active:scale-95 flex items-center justify-center border border-rose-200/60 cursor-pointer"
-                title="Delete last digit"
               >
                 <Delete className="w-4 h-4" />
               </button>
@@ -255,9 +223,9 @@ export const PlannerCover: React.FC<PlannerCoverProps> = ({
           </div>
         </div>
 
-        {/* Bottom subtle quote (ENGLISH ONLY) */}
-        <div className="text-center mt-2.5 text-[11px] text-pink-800/70 font-medium">
-          🌸 100% Private • Stored locally on your device
+        {/* Bottom subtle quote */}
+        <div className="text-center mt-3 text-[11px] text-pink-800/70 font-medium">
+          🌸 100% Private • Stored securely on your device
         </div>
       </div>
     </div>

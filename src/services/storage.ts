@@ -2,6 +2,242 @@ import { JournalDatabase, Task, IdeaEntry, IdeaCategory, CycleDayLog, DayLog, Ha
 import { isSameHebrewDayAndMonth } from './hebrewCalendar';
 
 const STORAGE_KEY = 'offline_personal_journal_v1';
+const VAULT_KEY = 'journal_emergency_recovery_vault';
+const SNAPSHOTS_KEY = 'journal_automatic_snapshots_v1';
+const CORRUPTED_BACKUP_KEY = 'journal_corrupted_raw_backup';
+
+export interface StorageSnapshot {
+  id: string;
+  timestamp: number;
+  dateStr: string;
+  taskCount: number;
+  ideaCount: number;
+  dayLogCount: number;
+  cycleLogCount: number;
+  description: string;
+  data: JournalDatabase;
+}
+
+export interface CandidateDatabase {
+  sourceKey: string;
+  sourceType: 'localStorage' | 'sessionStorage' | 'indexedDB' | 'vault';
+  score: number;
+  taskCount: number;
+  ideaCount: number;
+  dayLogCount: number;
+  cycleLogCount: number;
+  lastUpdated: number;
+  db: JournalDatabase;
+}
+
+// IndexedDB Helper for dual persistence
+const IDB_NAME = 'RoyalPersonalJournalIDB';
+const IDB_STORE = 'journal_store';
+const IDB_VERSION = 1;
+
+function openIDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    if (typeof indexedDB === 'undefined') {
+      return reject(new Error('IndexedDB not supported in this environment'));
+    }
+    const request = indexedDB.open(IDB_NAME, IDB_VERSION);
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) {
+        db.createObjectStore(IDB_STORE);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function saveToIndexedDB(db: JournalDatabase): Promise<void> {
+  try {
+    const idb = await openIDB();
+    const tx = idb.transaction(IDB_STORE, 'readwrite');
+    const store = tx.objectStore(IDB_STORE);
+    store.put(JSON.stringify(db), 'active_db');
+    store.put(JSON.stringify(db), `snapshot_${Date.now()}`);
+    return new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (err) {
+    console.warn('Could not save to IndexedDB:', err);
+  }
+}
+
+export async function loadFromIndexedDB(): Promise<JournalDatabase | null> {
+  try {
+    const idb = await openIDB();
+    const tx = idb.transaction(IDB_STORE, 'readonly');
+    const store = tx.objectStore(IDB_STORE);
+    const req = store.get('active_db');
+    return new Promise((resolve) => {
+      req.onsuccess = () => {
+        if (req.result && typeof req.result === 'string') {
+          try {
+            resolve(JSON.parse(req.result) as JournalDatabase);
+          } catch {
+            resolve(null);
+          }
+        } else {
+          resolve(null);
+        }
+      };
+      req.onerror = () => resolve(null);
+    });
+  } catch {
+    return null;
+  }
+}
+
+// Calculate how much real user-written content exists in a database
+export function scoreUserData(db: JournalDatabase | null | undefined): number {
+  if (!db) return 0;
+  let score = 0;
+
+  // Initial starter tasks IDs & titles
+  const sampleTaskTitles = [
+    "Review today's top priorities & goals",
+    'Hydrate & drink fresh water throughout the day',
+    'Take a gentle 15-minute stretch or walk',
+    'Read an inspiring chapter & unwind before bed',
+  ];
+
+  if (Array.isArray(db.tasks)) {
+    for (const t of db.tasks) {
+      if (t && t.title) {
+        if (!sampleTaskTitles.includes(t.title)) {
+          score += 10; // Real user task!
+        } else {
+          score += 1;
+        }
+      }
+    }
+  }
+
+  // Initial starter idea titles
+  const sampleIdeaTitles = [
+    'Welcome to Your Private Daily Planner & Journal! 🎀',
+    'Gentle Evening Routine & Creative Calm',
+    'ברוכים הבאים ליומן',
+    'רעיון לפרויקט חדש',
+  ];
+
+  if (Array.isArray(db.ideas)) {
+    for (const idea of db.ideas) {
+      if (idea && idea.title) {
+        const isSample = sampleIdeaTitles.some((s) => idea.title.includes(s));
+        if (!isSample) {
+          score += 20; // Real user note/idea!
+        } else {
+          score += 1;
+        }
+      }
+    }
+  }
+
+  if (db.dayLogs && typeof db.dayLogs === 'object') {
+    for (const dateKey of Object.keys(db.dayLogs)) {
+      const log = db.dayLogs[dateKey];
+      if (log) {
+        if (log.dailyNote || log.dailyThoughts) score += 15;
+        if (log.gratitude && !log.gratitude.includes('peaceful start to the day')) score += 10;
+        if (log.importantEvents && log.importantEvents.length > 0) score += 10 * log.importantEvents.length;
+        if (log.witItems && log.witItems.length > 0) score += 10 * log.witItems.length;
+        if (log.middayCheckIn) score += 10;
+      }
+    }
+  }
+
+  if (db.cycleLogs && typeof db.cycleLogs === 'object') {
+    const cycleKeys = Object.keys(db.cycleLogs);
+    if (cycleKeys.length > 0) {
+      score += cycleKeys.length * 5;
+    }
+  }
+
+  return score;
+}
+
+// Deep scanner that scans ALL localStorage and sessionStorage keys for any journal data
+export function scanAllStorageForJournals(): CandidateDatabase[] {
+  const candidates: CandidateDatabase[] = [];
+
+  function evaluateItem(raw: string | null, key: string, type: CandidateDatabase['sourceType']) {
+    if (!raw || typeof raw !== 'string') return;
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        // Does it look like a journal database?
+        const hasTasks = Array.isArray(parsed.tasks);
+        const hasIdeas = Array.isArray(parsed.ideas);
+        const hasDayLogs = Boolean(parsed.dayLogs && typeof parsed.dayLogs === 'object');
+        const hasCycleLogs = Boolean(parsed.cycleLogs && typeof parsed.cycleLogs === 'object');
+
+        if (hasTasks || hasIdeas || hasDayLogs || hasCycleLogs) {
+          const validatedDb: JournalDatabase = {
+            version: parsed.version || 1,
+            tasks: Array.isArray(parsed.tasks) ? parsed.tasks : [],
+            ideas: Array.isArray(parsed.ideas) ? parsed.ideas : [],
+            cycleLogs: parsed.cycleLogs || {},
+            dayLogs: parsed.dayLogs || {},
+            habits: parsed.habits || defaultHabits,
+            settings: parsed.settings || defaultSettings,
+            lastUpdated: parsed.lastUpdated || Date.now(),
+          };
+
+          const score = scoreUserData(validatedDb);
+          candidates.push({
+            sourceKey: key,
+            sourceType: type,
+            score,
+            taskCount: validatedDb.tasks.length,
+            ideaCount: validatedDb.ideas.length,
+            dayLogCount: Object.keys(validatedDb.dayLogs).length,
+            cycleLogCount: Object.keys(validatedDb.cycleLogs).length,
+            lastUpdated: validatedDb.lastUpdated,
+            db: validatedDb,
+          });
+        }
+      }
+    } catch {
+      // not JSON or not a journal, ignore
+    }
+  }
+
+  // 1. Scan all localStorage keys
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key) {
+        evaluateItem(localStorage.getItem(key), key, key === VAULT_KEY ? 'vault' : 'localStorage');
+      }
+    }
+  } catch (err) {
+    console.warn('Error reading localStorage keys during scan:', err);
+  }
+
+  // 2. Scan sessionStorage keys
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        if (key) {
+          evaluateItem(sessionStorage.getItem(key), key, 'sessionStorage');
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Error reading sessionStorage keys during scan:', err);
+  }
+
+  // Sort descending by score, then by lastUpdated
+  candidates.sort((a, b) => b.score - a.score || b.lastUpdated - a.lastUpdated);
+  return candidates;
+}
 
 // Format Date as YYYY-MM-DD in local time
 export function formatDateKey(date: Date = new Date()): string {
@@ -182,8 +418,9 @@ const defaultSettings: AppSettings = {
   averageCycleLength: 28,
   averagePeriodLength: 5,
   isPinLocked: false,
+  pinCode: '2006',
   autoLockMinutes: 20,
-  userDisplayName: 'My Daily Planner',
+  userDisplayName: 'My Planner',
   soundAlertsEnabled: true,
 };
 
@@ -308,20 +545,83 @@ function createInitialDatabase(): JournalDatabase {
   };
 }
 
+export function getAutomaticSnapshots(): StorageSnapshot[] {
+  try {
+    const raw = localStorage.getItem(SNAPSHOTS_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as StorageSnapshot[];
+  } catch {
+    return [];
+  }
+}
+
+function recordSnapshot(db: JournalDatabase, description: string = 'Auto-Save'): void {
+  try {
+    const snapshots = getAutomaticSnapshots();
+    const newSnapshot: StorageSnapshot = {
+      id: `snap_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: Date.now(),
+      dateStr: new Date().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      taskCount: db.tasks.length,
+      ideaCount: db.ideas.length,
+      dayLogCount: Object.keys(db.dayLogs || {}).length,
+      cycleLogCount: Object.keys(db.cycleLogs || {}).length,
+      description,
+      data: db,
+    };
+    // Keep max 10 recent snapshots
+    const updated = [newSnapshot, ...snapshots.slice(0, 9)];
+    localStorage.setItem(SNAPSHOTS_KEY, JSON.stringify(updated));
+  } catch (err) {
+    console.warn('Could not record snapshot:', err);
+  }
+}
+
 export function loadJournalDatabase(): JournalDatabase {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
+    let raw = localStorage.getItem(STORAGE_KEY);
+    let parsed: JournalDatabase | null = null;
+
+    if (raw) {
+      try {
+        parsed = JSON.parse(raw) as JournalDatabase;
+      } catch (parseErr) {
+        console.error('Failed to parse STORAGE_KEY, saving corrupt text to vault:', parseErr);
+        try {
+          localStorage.setItem(CORRUPTED_BACKUP_KEY, raw);
+        } catch {
+          // ignore
+        }
+      }
+    }
+
+    // If current active DB has no user data (or is missing), check if we have older candidate databases in localStorage/sessionStorage
+    const currentScore = scoreUserData(parsed);
+    if (currentScore <= 0) {
+      const candidates = scanAllStorageForJournals();
+      const bestCandidate = candidates.find((c) => c.score > 0);
+      if (bestCandidate) {
+        console.info(`Found previous user journal in '${bestCandidate.sourceKey}' with score ${bestCandidate.score}. Auto-recovering!`);
+        parsed = bestCandidate.db;
+        // Resave to primary storage key so it stays permanently active
+        saveJournalDatabase(parsed);
+      }
+    }
+
+    if (!parsed) {
       const embedded = (window as unknown as { __STANDALONE_EMBEDDED_DATA__?: JournalDatabase }).__STANDALONE_EMBEDDED_DATA__;
       const initial = embedded || createInitialDatabase();
       saveJournalDatabase(initial);
       return initial;
     }
-    const parsed = JSON.parse(raw) as JournalDatabase;
+
     // ensure migrations or missing fields
     if (!parsed.settings) parsed.settings = defaultSettings;
-    if (!parsed.settings.userDisplayName || parsed.settings.userDisplayName.includes('יומני')) {
-      parsed.settings.userDisplayName = 'My Daily Planner';
+    if (!parsed.settings.pinCode || parsed.settings.pinCode === '1234') {
+      parsed.settings.pinCode = '2006';
+    }
+    if (!parsed.settings.userDisplayName || parsed.settings.userDisplayName === 'יומני המלכותי' || parsed.settings.userDisplayName === 'My Daily Planner') {
+      parsed.settings.userDisplayName = 'My Planner';
     }
     if (!parsed.habits) parsed.habits = defaultHabits;
     if (!parsed.cycleLogs) parsed.cycleLogs = {};
@@ -329,48 +629,19 @@ export function loadJournalDatabase(): JournalDatabase {
     if (!parsed.tasks) parsed.tasks = [];
     if (!parsed.ideas) parsed.ideas = [];
 
-    // Migrate any legacy Hebrew starter cards to English
-    parsed.ideas = parsed.ideas.map((entry) => {
-      if (entry.title.includes('ברוכים הבאים ליומן')) {
-        return {
-          ...entry,
-          title: 'Welcome to Your Private Daily Planner & Journal! 🎀',
-          content: 'This planner is 100% private and stored locally on your device. It works completely offline with no cloud or tracking. Capture your daily tasks, schedule, thoughts, creative projects, track your habits, and celebrate every little step.',
-          category: 'Inspiration',
-          tags: ['welcome', 'fresh-start', 'mindfulness'],
-        };
-      }
-      if (entry.title.includes('רעיון לפרויקט חדש')) {
-        return {
-          ...entry,
-          title: 'Gentle Evening Routine & Creative Calm',
-          content: 'Spend 20 quiet screen-free minutes in the evening with a warm cup of herbal tea, soft music, and journaling your gratitude. A tranquil sanctuary for your thoughts.',
-          category: 'Idea',
-          tags: ['creativity', 'evening-routine', 'peace'],
-        };
-      }
-      // Map Hebrew categories to English
-      const catMap: Record<string, IdeaCategory> = {
-        'מחשבה': 'Reflection',
-        'רעיון': 'Idea',
-        'פרויקט': 'Project',
-        'השראה': 'Inspiration',
-        'תובנה': 'Insight',
-        'חלום': 'Dream',
-        'יצירה': 'Creative',
-      };
-      if (catMap[entry.category]) {
-        return {
-          ...entry,
-          category: catMap[entry.category],
-        };
-      }
-      return entry;
-    });
-
     return parsed;
   } catch (err) {
     console.error('Failed to read from localStorage:', err);
+    // Before returning initial, check if vault has data
+    try {
+      const vaultRaw = localStorage.getItem(VAULT_KEY);
+      if (vaultRaw) {
+        const vaultDb = JSON.parse(vaultRaw) as JournalDatabase;
+        if (scoreUserData(vaultDb) > 0) return vaultDb;
+      }
+    } catch {
+      // ignore
+    }
     return createInitialDatabase();
   }
 }
@@ -378,10 +649,83 @@ export function loadJournalDatabase(): JournalDatabase {
 export function saveJournalDatabase(db: JournalDatabase): void {
   try {
     db.lastUpdated = Date.now();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+    const jsonStr = JSON.stringify(db);
+    localStorage.setItem(STORAGE_KEY, jsonStr);
+
+    const userScore = scoreUserData(db);
+    // If the database has real user content, protect it aggressively in the emergency vault & snapshots & IndexedDB
+    if (userScore > 0) {
+      localStorage.setItem(VAULT_KEY, jsonStr);
+      recordSnapshot(db, `Auto-saved (${db.tasks.length} tasks, ${db.ideas.length} notes)`);
+    }
+
+    // Also persist asynchronously to IndexedDB
+    saveToIndexedDB(db).catch(() => {});
   } catch (err) {
     console.error('Failed to save to localStorage:', err);
+    // If localStorage quota exceeded, try to still save into IndexedDB
+    saveToIndexedDB(db).catch(() => {});
   }
+}
+
+export async function copyDatabaseToClipboard(db: JournalDatabase): Promise<boolean> {
+  try {
+    const payload = JSON.stringify({
+      appName: 'MyRoyalJournalBackup',
+      version: db.version || 1,
+      exportedAt: Date.now(),
+      database: db,
+    });
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(payload);
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.error('Error copying to clipboard:', err);
+    return false;
+  }
+}
+
+export function importDatabaseFromText(text: string): JournalDatabase {
+  if (!text || !text.trim()) {
+    throw new Error('הטקסט שהוזן ריק');
+  }
+  const clean = text.trim();
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(clean);
+  } catch {
+    throw new Error('פורמט לא תקין. יש לוודא שהעתקת את כל נתוני היומן במלואם');
+  }
+
+  // Check if wrapped in payload
+  let targetDb: unknown = parsed;
+  if (parsed && typeof parsed === 'object' && 'database' in parsed) {
+    targetDb = (parsed as { database: unknown }).database;
+  }
+
+  if (!targetDb || typeof targetDb !== 'object') {
+    throw new Error('מבנה נתוני היומן לא מזוהה');
+  }
+
+  const rawDb = targetDb as Partial<JournalDatabase>;
+  if (!Array.isArray(rawDb.tasks) && !Array.isArray(rawDb.ideas) && !rawDb.dayLogs) {
+    throw new Error('הקובץ אינו מכיל משימות, רעיונות או רשומות יומן');
+  }
+
+  const completeDb: JournalDatabase = {
+    version: rawDb.version || 1,
+    tasks: Array.isArray(rawDb.tasks) ? rawDb.tasks : [],
+    ideas: Array.isArray(rawDb.ideas) ? rawDb.ideas : [],
+    cycleLogs: rawDb.cycleLogs || {},
+    dayLogs: rawDb.dayLogs || {},
+    habits: rawDb.habits || defaultHabits,
+    settings: rawDb.settings || defaultSettings,
+    lastUpdated: Date.now(),
+  };
+
+  return completeDb;
 }
 
 export function exportToJsonFile(db: JournalDatabase): void {

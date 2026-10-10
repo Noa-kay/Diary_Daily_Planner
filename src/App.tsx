@@ -26,11 +26,14 @@ import { IdeasJournal } from './components/IdeasJournal';
 import { CycleTracker } from './components/CycleTracker';
 import { JokesDigest } from './components/JokesDigest';
 import { BackupModal } from './components/BackupModal';
+import { RecoveryModal } from './components/RecoveryModal';
+import { SettingsModal } from './components/SettingsModal';
 import { PinLockScreen, PinSettingsModal } from './components/PinLockModal';
 import { PlannerCover } from './components/PlannerCover';
 import { useTimeReminders } from './hooks/useTimeReminders';
 import { useInactivityLock } from './hooks/useInactivityLock';
 import { ReminderChimeAlert } from './components/ReminderChimeAlert';
+import { scoreUserData } from './services/storage';
 
 export default function App() {
   const [db, setDb] = useState<JournalDatabase>(() => loadJournalDatabase());
@@ -39,6 +42,8 @@ export default function App() {
   const [currentView, setCurrentView] = useState<BookView>('calendar');
   const [showCover, setShowCover] = useState(false);
   const [isBackupOpen, setIsBackupOpen] = useState(false);
+  const [isRecoveryOpen, setIsRecoveryOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isPinSettingsOpen, setIsPinSettingsOpen] = useState(false);
   const [isLocked, setIsLocked] = useState<boolean>(() => {
     return Boolean(db.settings?.pinCode && db.settings?.isPinLocked);
@@ -259,18 +264,18 @@ export default function App() {
         />
       )}
 
-      {/* If PIN is locked or cover is active, show the Planner Cover with integrated lock */}
+      {/* If PIN is locked or cover is active, show the clean Planner Cover with PIN lock */}
       {(isLocked && db.settings.pinCode) || showCover ? (
         <div className="min-h-screen flex flex-col items-center justify-center p-4">
           <PlannerCover
             isLocked={Boolean(isLocked && db.settings.pinCode)}
-            currentPin={db.settings.pinCode}
+            currentPin={db.settings.pinCode || '2006'}
             onUnlock={() => {
               handleUnlock();
               setShowCover(false);
             }}
             onOpen={() => {
-              if (isLocked && db.settings.pinCode) return;
+              handleUnlock();
               setShowCover(false);
             }}
             userDisplayName={db.settings.userDisplayName}
@@ -283,8 +288,7 @@ export default function App() {
             onViewChange={setCurrentView}
             settings={db.settings}
             onUpdateTheme={(theme) => handleUpdateSettings({ theme })}
-            openBackupModal={() => setIsBackupOpen(true)}
-            openPinModal={() => setIsPinSettingsOpen(true)}
+            openSettingsModal={() => setIsSettingsOpen(true)}
             onToggleLock={handleToggleLock}
             hasTasksToday={hasTasksToday}
             onShowCover={() => setShowCover(true)}
@@ -373,11 +377,46 @@ export default function App() {
             )}
           </BookContainer>
 
+          {/* Unified Planner Settings Modal */}
+          <SettingsModal
+            isOpen={isSettingsOpen}
+            onClose={() => setIsSettingsOpen(false)}
+            settings={db.settings}
+            onUpdateSettings={handleUpdateSettings}
+            onUpdateTheme={(theme) => handleUpdateSettings({ theme })}
+            onLockNow={() => {
+              setIsLocked(true);
+              setShowCover(true);
+              handleUpdateSettings({ isPinLocked: true });
+            }}
+            soundAlertsEnabled={soundEnabled}
+            onToggleSoundAlerts={() =>
+              handleUpdateSettings({ soundAlertsEnabled: !soundEnabled })
+            }
+            onTestChime={triggerTestSound}
+            onOpenRecoveryModal={() => setIsRecoveryOpen(true)}
+            database={db}
+            onRestoreDatabase={(newDb) => {
+              setDb(newDb);
+            }}
+          />
+
           {/* Backup & Restore Modal */}
           <BackupModal
             isOpen={isBackupOpen}
             onClose={() => setIsBackupOpen(false)}
             database={db}
+            onRestoreDatabase={(newDb) => {
+              setDb(newDb);
+            }}
+            onOpenRecovery={() => setIsRecoveryOpen(true)}
+          />
+
+          {/* Emergency Recovery & Rescue Modal */}
+          <RecoveryModal
+            isOpen={isRecoveryOpen}
+            onClose={() => setIsRecoveryOpen(false)}
+            currentDatabase={db}
             onRestoreDatabase={(newDb) => {
               setDb(newDb);
             }}

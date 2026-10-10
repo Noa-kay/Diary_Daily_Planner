@@ -189,7 +189,7 @@ export const JokesDigest: React.FC<JokesDigestProps> = ({
           Summary book of all the jokes, funny moments, catchy idioms, and witty quotes you recorded throughout the Hebrew months and years!
         </p>
 
-        {/* Big Switch: Monthly Hebrew Summary vs Yearly Hebrew Summary */}
+        {/* Big Switch: Monthly Summary vs Yearly Summary */}
         <div className="inline-flex items-center p-1 bg-pink-100/70 rounded-2xl border border-pink-200 shadow-2xs">
           <button
             type="button"
@@ -201,7 +201,7 @@ export const JokesDigest: React.FC<JokesDigestProps> = ({
             }`}
           >
             <CalendarIcon className="w-3.5 h-3.5 text-pink-500" />
-            <span>Monthly Hebrew Digest (חודש עברי)</span>
+            <span>Monthly Digest</span>
           </button>
 
           <button
@@ -214,7 +214,7 @@ export const JokesDigest: React.FC<JokesDigestProps> = ({
             }`}
           >
             <CalendarRange className="w-3.5 h-3.5 text-amber-500" />
-            <span>Annual Hebrew Treasury (שנה עברית)</span>
+            <span>Annual Treasury</span>
           </button>
         </div>
       </div>
@@ -226,7 +226,7 @@ export const JokesDigest: React.FC<JokesDigestProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             {/* Year Selector */}
             <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-pink-200 shadow-2xs text-xs">
-              <span className="text-stone-500 font-medium">Hebrew Year:</span>
+              <span className="text-stone-500 font-medium">Year:</span>
               <select
                 value={selectedHebrewYear}
                 onChange={(e) => setSelectedHebrewYear(Number(e.target.value))}
@@ -243,7 +243,7 @@ export const JokesDigest: React.FC<JokesDigestProps> = ({
             {/* Month Selector (Shown in monthly view) */}
             {activeTab === 'monthly' && (
               <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-pink-200 shadow-2xs text-xs">
-                <span className="text-stone-500 font-medium">Hebrew Month:</span>
+                <span className="text-stone-500 font-medium">Month:</span>
                 <select
                   value={selectedHebrewMonth}
                   onChange={(e) => setSelectedHebrewMonth(Number(e.target.value))}
@@ -251,7 +251,7 @@ export const JokesDigest: React.FC<JokesDigestProps> = ({
                 >
                   {HEBREW_MONTH_ORDER.map((mNum) => (
                     <option key={mNum} value={mNum}>
-                      חודש {HEBREW_MONTH_NAMES[mNum]} ({mNum})
+                      {HEBREW_MONTH_NAMES[mNum]} ({mNum})
                     </option>
                   ))}
                 </select>
@@ -339,8 +339,8 @@ export const JokesDigest: React.FC<JokesDigestProps> = ({
             <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
               <span>
                 {activeTab === 'monthly'
-                  ? `Summary for חודש ${HEBREW_MONTH_NAMES[selectedHebrewMonth] || ''} ${getHebrewYearLetter(selectedHebrewYear)}`
-                  : `Annual Treasury for שנת ${getHebrewYearLetter(selectedHebrewYear)}`}
+                  ? `Summary for ${HEBREW_MONTH_NAMES[selectedHebrewMonth] || ''} ${getHebrewYearLetter(selectedHebrewYear)}`
+                  : `Annual Treasury for ${getHebrewYearLetter(selectedHebrewYear)}`}
               </span>
               <span className="text-[10px] font-sans font-normal text-pink-600 bg-pink-50 px-2 py-0.5 rounded-full border border-pink-200">
                 {displayedItems.length} Entries

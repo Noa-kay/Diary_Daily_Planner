@@ -38,8 +38,13 @@ try {
     '<div id="root"></div>',
     `<script>
       try {
-        if (window.__STANDALONE_EMBEDDED_DATA__ && !localStorage.getItem('offline_personal_journal_v1')) {
-          localStorage.setItem('offline_personal_journal_v1', JSON.stringify(window.__STANDALONE_EMBEDDED_DATA__));
+        if (window.__STANDALONE_EMBEDDED_DATA__) {
+          if (!localStorage.getItem('offline_personal_journal_v1')) {
+            localStorage.setItem('offline_personal_journal_v1', JSON.stringify(window.__STANDALONE_EMBEDDED_DATA__));
+          }
+          if (!localStorage.getItem('journal_emergency_recovery_vault')) {
+            localStorage.setItem('journal_emergency_recovery_vault', JSON.stringify(window.__STANDALONE_EMBEDDED_DATA__));
+          }
         }
       } catch (e) {
         console.warn('Auto-init localStorage error:', e);

@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Download, Upload, ShieldCheck, HardDrive, AlertTriangle, CheckCircle, RefreshCw, X, FileJson, Globe, Monitor, Sparkles } from 'lucide-react';
+import { Download, Upload, ShieldCheck, HardDrive, AlertTriangle, CheckCircle, RefreshCw, X, FileJson, Globe, Monitor, Sparkles, LifeBuoy } from 'lucide-react';
 import { JournalDatabase } from '../types';
 import { exportToJsonFile, exportStandaloneHtmlFile, importFromJsonFile } from '../services/storage';
 
@@ -8,6 +8,7 @@ interface BackupModalProps {
   onClose: () => void;
   database: JournalDatabase;
   onRestoreDatabase: (db: JournalDatabase) => void;
+  onOpenRecovery?: () => void;
 }
 
 export const BackupModal: React.FC<BackupModalProps> = ({
@@ -15,6 +16,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
   onClose,
   database,
   onRestoreDatabase,
+  onOpenRecovery,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importStatus, setImportStatus] = useState<string | null>(null);
@@ -120,6 +122,34 @@ export const BackupModal: React.FC<BackupModalProps> = ({
 
         {/* Actions */}
         <div className="space-y-3">
+          {/* Emergency Recovery Center Button */}
+          {onOpenRecovery && (
+            <div className="p-4 rounded-xl border border-rose-300 bg-gradient-to-r from-rose-50 to-pink-50 hover:from-rose-100/60 hover:to-pink-100/60 transition shadow-xs flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-rose-500 text-white shadow-xs">
+                  <LifeBuoy className="w-5 h-5 animate-spin duration-3000" />
+                </div>
+                <div>
+                  <h5 className="font-bold text-sm text-rose-950 flex items-center gap-1.5">
+                    <span>איתור ושחזור חומרים (Data Recovery) 🛟</span>
+                  </h5>
+                  <p className="text-xs text-rose-800/80 mt-0.5">
+                    חומרים נעלמו או נמחקו? סרקי את כל זיכרון הדפדפן והעבירי נתונים בין כתובות האתר.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  onClose();
+                  onOpenRecovery();
+                }}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-xs transition cursor-pointer shrink-0 ml-3"
+              >
+                פתח מרכז שחזור ↗
+              </button>
+            </div>
+          )}
+
           {/* Standalone HTML Download */}
           <div className="p-4 rounded-xl border border-pink-300 bg-gradient-to-r from-pink-50/60 to-rose-50/40 hover:from-pink-50 hover:to-rose-50 transition shadow-2xs">
             <div className="flex items-start justify-between">

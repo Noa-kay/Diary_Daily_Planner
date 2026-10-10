@@ -192,10 +192,10 @@ export const MonthlyBookSpread: React.FC<MonthlyBookSpreadProps> = ({
             <button
               onClick={onOpenJokesDigest}
               className="px-3 py-1.5 rounded-full bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200/90 text-xs font-medium transition cursor-pointer flex items-center gap-1.5 shadow-2xs hover:scale-102"
-              title="View Monthly & Annual Hebrew Jokes Summary"
+              title="View Monthly & Annual Jokes & Quotes Summary"
             >
               <Smile className="w-3.5 h-3.5 text-amber-600" />
-              <span className="hidden sm:inline">Jokes Digest (סיכום בדיחות)</span>
+              <span className="hidden sm:inline">Jokes Digest</span>
               <span className="sm:hidden">Jokes 🃏</span>
             </button>
           )}
