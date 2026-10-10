@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { 
   ArrowRight, 
@@ -25,7 +25,9 @@ import {
   MessageSquareQuote,
   Zap,
   Flame,
-  Volume2
+  Volume2,
+  ChevronsUpDown,
+  ArrowRightLeft
 } from 'lucide-react';
 import { 
   Task, 
@@ -52,6 +54,12 @@ import {
   DayEventItem
 } from '../services/storage';
 import { getHebrewDateInfo } from '../services/hebrewCalendar';
+import { 
+  syncEventAction, 
+  subscribeQueueChanges, 
+  isCalendarConnected, 
+  processOfflineQueue 
+} from '../services/googleCalendarService';
 
 export const EVENT_ICON_CATEGORIES: { name: string; icons: string[] }[] = [
   {
@@ -102,6 +110,11 @@ interface DayBookPageProps {
   habits: Habit[];
   settings: AppSettings;
   onOpenJokesDigest?: () => void;
+  onTransferDay?: (
+    fromDate: string,
+    toDate: string,
+    options?: { conflict?: 'merge' | 'replace' }
+  ) => void;
 }
 
 const MOODS: { type: MoodType; label: string; emoji: string }[] = [
@@ -139,7 +152,7 @@ const DEFAULT_SELF_CARE = [
   'Do something that makes me happy',
 ];
 
-const SCHEDULE_TIMES = [
+const DEFAULT_SCHEDULE_TIMES = [
   '6 AM',
   '7 AM',
   '8 AM',
@@ -161,6 +174,31 @@ const SCHEDULE_TIMES = [
   '12 AM',
 ];
 
+export const SCHEDULE_TIMES = DEFAULT_SCHEDULE_TIMES;
+
+export function parseTimeToMinutes(timeStr: string): number {
+  const clean = timeStr.trim().toUpperCase();
+  if (clean === '12 AM' || clean === '12:00 AM' || clean === '24:00') {
+    return 1440;
+  }
+  const matchAmPm = clean.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/);
+  if (matchAmPm) {
+    let hours = parseInt(matchAmPm[1], 10);
+    const minutes = matchAmPm[2] ? parseInt(matchAmPm[2], 10) : 0;
+    const isPm = matchAmPm[3] === 'PM';
+    if (isPm && hours < 12) hours += 12;
+    if (!isPm && hours === 12) hours = 0;
+    return hours * 60 + minutes;
+  }
+  const match24 = clean.match(/^(\d{1,2}):(\d{2})$/);
+  if (match24) {
+    const hours = parseInt(match24[1], 10);
+    const minutes = parseInt(match24[2], 10);
+    return hours * 60 + minutes;
+  }
+  return 9999;
+}
+
 export const DayBookPage: React.FC<DayBookPageProps> = ({
   selectedDate,
   onSelectDate,
@@ -179,6 +217,7 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
   habits,
   settings,
   onOpenJokesDigest,
+  onTransferDay,
 }) => {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [isAddingTask, setIsAddingTask] = useState(false);
@@ -251,10 +290,183 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
 
   // Hourly Schedule
   const schedule = dayLog?.schedule || {};
+  const scheduleInputRefs = useRef<{ [key: string]: HTMLTextAreaElement | null }>({});
+
+  // Custom added time slots for the day
+  const [customTimesForDay, setCustomTimesForDay] = useState<string[]>([]);
+  const [isAddingTimeSlot, setIsAddingTimeSlot] = useState(false);
+  const [newCustomTimeInput, setNewCustomTimeInput] = useState('');
+
+  // Transfer Day Modal State
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [transferTargetDate, setTransferTargetDate] = useState(() => {
+    const d = parseDateKey(selectedDate);
+    d.setDate(d.getDate() + 1);
+    return formatDateKey(d);
+  });
+  const [transferConflict, setTransferConflict] = useState<'merge' | 'replace'>('merge');
+  const [transferSuccessMessage, setTransferSuccessMessage] = useState<string | null>(null);
+
+  // Reset custom times input on date change
+  useEffect(() => {
+    setCustomTimesForDay([]);
+    setIsAddingTimeSlot(false);
+    setNewCustomTimeInput('');
+  }, [selectedDate]);
+
+  // Merge default times + any keys from day schedule + dynamically added times, sorted chronologically
+  const allScheduleTimes = Array.from(
+    new Set([
+      ...DEFAULT_SCHEDULE_TIMES,
+      ...Object.keys(schedule),
+      ...customTimesForDay,
+    ])
+  ).sort((a, b) => {
+    const diff = parseTimeToMinutes(a) - parseTimeToMinutes(b);
+    if (diff !== 0) return diff;
+    return a.localeCompare(b);
+  });
+
+  const autoResizeTextarea = (el: HTMLTextAreaElement | null) => {
+    if (!el) return;
+    el.style.height = 'auto';
+    // Clean compact default height of 28px (single line). Expands dynamically only if content needs more height!
+    const targetHeight = Math.max(el.scrollHeight, 28);
+    el.style.height = `${targetHeight}px`;
+  };
+
+  useEffect(() => {
+    allScheduleTimes.forEach((timeStr) => {
+      const el = scheduleInputRefs.current[timeStr];
+      if (el) {
+        el.style.height = 'auto';
+        const targetHeight = Math.max(el.scrollHeight, 28);
+        el.style.height = `${targetHeight}px`;
+      }
+    });
+  }, [selectedDate, schedule, allScheduleTimes]);
+
   const handleScheduleChange = (hour: string, val: string) => {
     onUpdateDayLog(selectedDate, {
       schedule: { ...schedule, [hour]: val },
     });
+  };
+
+  const handleAddCustomTimeSlot = (presetCandidate?: string) => {
+    const raw = (presetCandidate ?? newCustomTimeInput).trim();
+    if (!raw) return;
+
+    let formatted = raw;
+    const m24 = raw.match(/^(\d{1,2}):(\d{2})$/);
+    if (m24) {
+      let h = parseInt(m24[1], 10);
+      const m = m24[2];
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      if (h > 12) h -= 12;
+      if (h === 0) h = 12;
+      formatted = `${h}:${m} ${ampm}`;
+    } else {
+      const mSimple = raw.match(/^(\d{1,2})\s*(am|pm)$/i);
+      if (mSimple) {
+        formatted = `${mSimple[1]} ${mSimple[2].toUpperCase()}`;
+      }
+    }
+
+    if (!allScheduleTimes.includes(formatted)) {
+      setCustomTimesForDay((prev) => [...prev, formatted]);
+    }
+    setNewCustomTimeInput('');
+    setIsAddingTimeSlot(false);
+
+    setTimeout(() => {
+      const el = scheduleInputRefs.current[formatted];
+      if (el) {
+        el.focus();
+        el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    }, 60);
+  };
+
+  const handleRemoveCustomTimeSlot = (timeStr: string) => {
+    setCustomTimesForDay((prev) => prev.filter((t) => t !== timeStr));
+    if (schedule[timeStr] !== undefined) {
+      const next = { ...schedule };
+      delete next[timeStr];
+      onUpdateDayLog(selectedDate, { schedule: next });
+    }
+  };
+
+  const handleExecuteTransfer = () => {
+    if (!transferTargetDate || transferTargetDate === selectedDate) return;
+    if (onTransferDay) {
+      onTransferDay(selectedDate, transferTargetDate, {
+        conflict: transferConflict,
+      });
+    }
+    setIsTransferModalOpen(false);
+    confetti({
+      particleCount: 40,
+      spread: 60,
+      origin: { y: 0.6 },
+      colors: ['#f472b6', '#ec4899', '#fbcfe8'],
+    });
+    setTransferSuccessMessage(`כל נתוני היום הועברו בהצלחה ל-${transferTargetDate} ✨`);
+    setTimeout(() => setTransferSuccessMessage(null), 4000);
+  };
+
+  const handleScheduleKeyDown = (
+    timeStr: string,
+    index: number,
+    e: React.KeyboardEvent<HTMLTextAreaElement>
+  ) => {
+    if (e.key === 'ArrowDown') {
+      const target = e.currentTarget;
+      const text = target.value;
+      const selEnd = target.selectionEnd ?? 0;
+      const lastNl = text.lastIndexOf('\n');
+
+      // If text has no newline, OR cursor is on/after the last newline, OR cursor is at the end of text,
+      // OR user is pressing Alt/Ctrl/Cmd:
+      const isAtLastLine = lastNl === -1 || selEnd > lastNl;
+      const isAtEnd = selEnd === text.length;
+
+      if (isAtLastLine || isAtEnd || e.altKey || e.ctrlKey || e.metaKey) {
+        if (index < allScheduleTimes.length - 1) {
+          e.preventDefault();
+          const nextTime = allScheduleTimes[index + 1];
+          const nextEl = scheduleInputRefs.current[nextTime];
+          if (nextEl) {
+            nextEl.focus();
+            const nextLen = nextEl.value.length;
+            nextEl.setSelectionRange(nextLen, nextLen);
+            nextEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          }
+        }
+      }
+    } else if (e.key === 'ArrowUp') {
+      const target = e.currentTarget;
+      const text = target.value;
+      const selStart = target.selectionStart ?? 0;
+      const firstNl = text.indexOf('\n');
+
+      // If text has no newline, OR cursor is on/before first newline, OR cursor is at start of text:
+      const isAtFirstLine = firstNl === -1 || selStart <= firstNl;
+      const isAtStart = selStart === 0;
+
+      if (isAtFirstLine || isAtStart || e.altKey || e.ctrlKey || e.metaKey) {
+        if (index > 0) {
+          e.preventDefault();
+          const prevTime = allScheduleTimes[index - 1];
+          const prevEl = scheduleInputRefs.current[prevTime];
+          if (prevEl) {
+            prevEl.focus();
+            const prevLen = prevEl.value.length;
+            prevEl.setSelectionRange(prevLen, prevLen);
+            prevEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          }
+        }
+      }
+    }
   };
 
   // Meals
@@ -288,6 +500,24 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
   const [isRecurrencePickerOpen, setIsRecurrencePickerOpen] = useState(false);
   const [quickChangeIndex, setQuickChangeIndex] = useState<number | null>(null);
 
+  // Google Calendar Integration State
+  const [gcalQueueCount, setGcalQueueCount] = useState<number>(0);
+  const [gcalStatusMsg, setGcalStatusMsg] = useState<string | null>(null);
+  const [isGcalConnected, setIsGcalConnected] = useState<boolean>(() => isCalendarConnected());
+  const [eventPendingDelete, setEventPendingDelete] = useState<DayEventItem | null>(null);
+
+  useEffect(() => {
+    const unsub = subscribeQueueChanges((count, _syncing, msg) => {
+      setGcalQueueCount(count);
+      setIsGcalConnected(isCalendarConnected());
+      if (msg) {
+        setGcalStatusMsg(msg);
+        setTimeout(() => setGcalStatusMsg(null), 3500);
+      }
+    });
+    return unsub;
+  }, []);
+
   const [editingEventIndex, setEditingEventIndex] = useState<number | null>(null);
   const [editingEventText, setEditingEventText] = useState('');
   const [editingEventIcon, setEditingEventIcon] = useState<string>('🎂');
@@ -295,7 +525,7 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
   const [editingPickerOpen, setEditingPickerOpen] = useState(false);
   const [editingRecurrencePickerOpen, setEditingRecurrencePickerOpen] = useState(false);
 
-  const handleAddEvent = (e?: React.FormEvent) => {
+  const handleAddEvent = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const trimmed = newEventText.trim();
     if (!trimmed) return;
@@ -310,9 +540,18 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
     setNewEventRecurrence('none');
     setIsIconPickerOpen(false);
     setIsRecurrencePickerOpen(false);
+
+    // Sync to Google Calendar or queue offline
+    try {
+      const syncRes = await syncEventAction('insert', selectedDate, finalEvent);
+      setGcalStatusMsg(syncRes.message);
+      setTimeout(() => setGcalStatusMsg(null), 3500);
+    } catch (err) {
+      console.warn('GCal sync error:', err);
+    }
   };
 
-  const handleUpdateEventIcon = (item: DayEventItem, newIcon: string) => {
+  const handleUpdateEventIcon = async (item: DayEventItem, newIcon: string) => {
     const targetDateForEdit = item.originalDate || selectedDate;
     const formatted = formatEventItem(
       newIcon,
@@ -326,6 +565,14 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
     const updated = sourceLogEvents.map((e) => (e === item.evt ? formatted : e));
     onUpdateDayLog(targetDateForEdit, { importantEvents: updated });
     setQuickChangeIndex(null);
+
+    try {
+      const syncRes = await syncEventAction('update', targetDateForEdit, formatted, item.parsed.title);
+      setGcalStatusMsg(syncRes.message);
+      setTimeout(() => setGcalStatusMsg(null), 3500);
+    } catch (err) {
+      console.warn(err);
+    }
   };
 
   const handleStartEditEvent = (idx: number, item: DayEventItem) => {
@@ -338,11 +585,11 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
     setQuickChangeIndex(null);
   };
 
-  const handleSaveEditEvent = (item: DayEventItem) => {
+  const handleSaveEditEvent = async (item: DayEventItem) => {
     const trimmed = editingEventText.trim();
     const targetDateForEdit = item.originalDate || selectedDate;
     if (!trimmed) {
-      handleRemoveEvent(item);
+      setEventPendingDelete(item);
     } else {
       const formatted = formatEventItem(
         editingEventIcon,
@@ -355,6 +602,14 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
         (targetDateForEdit === selectedDate ? importantEvents : []);
       const updated = sourceLogEvents.map((e) => (e === item.evt ? formatted : e));
       onUpdateDayLog(targetDateForEdit, { importantEvents: updated });
+
+      try {
+        const syncRes = await syncEventAction('update', targetDateForEdit, formatted, item.parsed.title);
+        setGcalStatusMsg(syncRes.message);
+        setTimeout(() => setGcalStatusMsg(null), 3500);
+      } catch (err) {
+        console.warn(err);
+      }
     }
     setEditingEventIndex(null);
     setEditingEventText('');
@@ -369,13 +624,19 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
     setEditingRecurrencePickerOpen(false);
   };
 
+  // Triggers confirmation modal before deleting (Workspace API requirement)
   const handleRemoveEvent = (item: DayEventItem) => {
+    setEventPendingDelete(item);
+  };
+
+  const handleConfirmRemoveEvent = async (item: DayEventItem) => {
     const targetDateForRemoval = item.originalDate || selectedDate;
     const sourceLogEvents =
       (allDayLogs && allDayLogs[targetDateForRemoval]?.importantEvents) ||
       (targetDateForRemoval === selectedDate ? importantEvents : []);
     const updated = sourceLogEvents.filter((e) => e !== item.evt);
     onUpdateDayLog(targetDateForRemoval, { importantEvents: updated });
+    
     if (editingEventIndex !== null) {
       setEditingEventIndex(null);
       setEditingPickerOpen(false);
@@ -383,6 +644,16 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
     }
     if (quickChangeIndex !== null) {
       setQuickChangeIndex(null);
+    }
+    setEventPendingDelete(null);
+
+    // Sync delete to Google Calendar
+    try {
+      const syncRes = await syncEventAction('delete', targetDateForRemoval, item.evt, item.parsed.title);
+      setGcalStatusMsg(syncRes.message);
+      setTimeout(() => setGcalStatusMsg(null), 3500);
+    } catch (err) {
+      console.warn(err);
     }
   };
 
@@ -547,7 +818,7 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
       <div className="text-center pb-4 mb-4 border-b border-pink-200/80">
         
         {/* Navigation & Return Pill */}
-        <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
           <button
             onClick={onBackToCalendar}
             className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-pink-50 hover:bg-pink-100 text-pink-950 text-xs font-medium transition cursor-pointer border border-pink-200"
@@ -558,6 +829,21 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
           </button>
 
           <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                const nextD = parseDateKey(selectedDate);
+                nextD.setDate(nextD.getDate() + 1);
+                setTransferTargetDate(formatDateKey(nextD));
+                setIsTransferModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white hover:bg-pink-50 text-pink-900 text-xs font-medium transition cursor-pointer border border-pink-200 shadow-2xs group"
+              title="Accidentally planned on the wrong day? Move all entries to another date"
+            >
+              <ArrowRightLeft className="w-3.5 h-3.5 text-pink-500 group-hover:rotate-180 transition-transform duration-300" />
+              <span>Move Day to Another Date</span>
+            </button>
+
             <button
               onClick={handlePrevDay}
               className="p-1 px-2 rounded-full bg-pink-50 hover:bg-pink-100 text-pink-900 transition cursor-pointer text-xs border border-pink-200"
@@ -579,6 +865,12 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
             </button>
           </div>
         </div>
+
+        {transferSuccessMessage && (
+          <div className="mb-2 py-1 px-3 rounded-xl bg-pink-100 text-pink-950 text-xs font-semibold text-center border border-pink-300/80 animate-in fade-in">
+            {transferSuccessMessage}
+          </div>
+        )}
 
         {/* Subtitle & Title */}
         <p className="text-xs text-pink-500 font-script tracking-widest uppercase mb-0.5">
@@ -632,11 +924,60 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
             </div>
           </div>
           
-          <div className="flex items-center gap-1.5 text-[11px] font-medium text-pink-700 bg-white/90 px-3 py-1 rounded-full border border-pink-200 self-start sm:self-auto shadow-2xs">
-            <CalendarIcon className="w-3 h-3 text-pink-500" />
-            <span>Synced to Monthly Calendar 📅</span>
+          <div className="flex flex-wrap items-center gap-1.5 self-start sm:self-auto">
+            <div className="flex items-center gap-1.5 text-[11px] font-medium text-pink-700 bg-white/90 px-3 py-1 rounded-full border border-pink-200 shadow-2xs">
+              <CalendarIcon className="w-3 h-3 text-pink-500" />
+              <span>Monthly Spread 📅</span>
+            </div>
+
+            {/* Google Calendar Status Badge */}
+            <div
+              className={`flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full border shadow-2xs transition ${
+                isGcalConnected
+                  ? 'bg-sky-50 text-sky-900 border-sky-200'
+                  : 'bg-white/90 text-stone-600 border-stone-200'
+              }`}
+              title={
+                isGcalConnected
+                  ? 'Google Calendar auto-sync active'
+                  : 'Open Settings (⚙️) to connect your Google Calendar'
+              }
+            >
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  isGcalConnected
+                    ? gcalQueueCount > 0
+                      ? 'bg-amber-500 animate-pulse'
+                      : 'bg-emerald-500'
+                    : 'bg-stone-400'
+                }`}
+              />
+              <span>
+                {isGcalConnected
+                  ? gcalQueueCount > 0
+                    ? `G-Calendar: ${gcalQueueCount} queued offline`
+                    : 'G-Calendar Synced ✨'
+                  : 'G-Calendar Sync (⚙️)'}
+              </span>
+              {isGcalConnected && gcalQueueCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => processOfflineQueue()}
+                  className="ml-1 text-[10px] text-sky-700 underline font-bold cursor-pointer hover:text-sky-900"
+                >
+                  Sync Now
+                </button>
+              )}
+            </div>
           </div>
         </div>
+
+        {/* Temporary Google Calendar feedback message */}
+        {gcalStatusMsg && (
+          <div className="mb-2.5 py-1 px-3 rounded-xl bg-sky-50 text-sky-950 text-xs font-semibold text-center border border-sky-200/80 animate-in fade-in">
+            {gcalStatusMsg}
+          </div>
+        )}
 
         {/* Existing Events List */}
         {allEventsForThisDay.length > 0 ? (
@@ -1098,6 +1439,207 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
         </form>
       </div>
 
+      {/* Modal for Moving Day to Another Date */}
+      {isTransferModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in" dir="ltr">
+          <div className="w-full max-w-md rounded-3xl bg-white p-5 sm:p-6 shadow-2xl border border-pink-200 space-y-4 text-stone-800 animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-2 border-b border-pink-100">
+              <div className="flex items-center gap-2.5 text-pink-900">
+                <div className="w-9 h-9 rounded-2xl bg-pink-100 flex items-center justify-center text-pink-600 shadow-2xs">
+                  <ArrowRightLeft className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-pink-950 font-serif">Move Day to Another Date</h4>
+                  <p className="text-[11px] text-pink-600">Accidentally wrote on the wrong day? Transfer everything seamlessly.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsTransferModalOpen(false)}
+                className="p-1 rounded-xl text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Current Source Info */}
+            <div className="p-3 rounded-2xl bg-pink-50/60 border border-pink-100 text-xs space-y-1.5">
+              <div className="flex items-center justify-between font-semibold text-pink-900">
+                <span>From Date:</span>
+                <span className="font-mono bg-white px-2 py-0.5 rounded-lg border border-pink-200">{selectedDate}</span>
+              </div>
+              <div className="text-[11px] text-pink-800/80 flex flex-wrap gap-x-3 gap-y-1">
+                <span>📋 {dayTasks.length} tasks</span>
+                <span>⏰ {Object.values(schedule).filter((v) => typeof v === 'string' && v.trim()).length} scheduled hours</span>
+                <span>✦ Top Priorities & Notes</span>
+                {allEventsForThisDay.length > 0 && <span>🎀 {allEventsForThisDay.length} events</span>}
+              </div>
+            </div>
+
+            {/* Target Date Picker */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-pink-950">
+                Choose Target Destination Date:
+              </label>
+              <input
+                type="date"
+                value={transferTargetDate}
+                onChange={(e) => setTransferTargetDate(e.target.value)}
+                className="w-full px-3.5 py-2 text-xs font-medium bg-white rounded-xl border border-pink-200 focus:outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-200 text-pink-950 shadow-2xs"
+              />
+              {/* Quick shortcut pills */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const d = parseDateKey(selectedDate);
+                    d.setDate(d.getDate() + 1);
+                    setTransferTargetDate(formatDateKey(d));
+                  }}
+                  className="px-2 py-0.5 rounded-lg bg-pink-50 hover:bg-pink-100 text-[10px] font-semibold text-pink-800 border border-pink-200 cursor-pointer"
+                >
+                  Tomorrow (+1d)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const d = parseDateKey(selectedDate);
+                    d.setDate(d.getDate() - 1);
+                    setTransferTargetDate(formatDateKey(d));
+                  }}
+                  className="px-2 py-0.5 rounded-lg bg-pink-50 hover:bg-pink-100 text-[10px] font-semibold text-pink-800 border border-pink-200 cursor-pointer"
+                >
+                  Yesterday (-1d)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const d = parseDateKey(selectedDate);
+                    d.setDate(d.getDate() + 7);
+                    setTransferTargetDate(formatDateKey(d));
+                  }}
+                  className="px-2 py-0.5 rounded-lg bg-pink-50 hover:bg-pink-100 text-[10px] font-semibold text-pink-800 border border-pink-200 cursor-pointer"
+                >
+                  Next Week (+7d)
+                </button>
+              </div>
+            </div>
+
+            {/* Clean Move Assurance Box (Never copy, strictly move!) */}
+            <div className="p-3.5 rounded-2xl bg-amber-50/90 border border-amber-200/90 text-xs space-y-1.5 text-stone-800">
+              <div className="flex items-center justify-between font-bold text-amber-950 text-xs">
+                <span className="flex items-center gap-1.5">
+                  <span>✂️</span>
+                  <span>העברה מלאה ומוחלטת (Move & Clear Source)</span>
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-200/80 text-amber-900 font-bold">
+                  ללא שכפול
+                </span>
+              </div>
+              <p className="text-[11px] text-amber-900/90 leading-relaxed">
+                כל המשימות, שעות היום, הפתקים, והאירועים החשובים יועברו במלואם לתאריך היעד ויימחקו לחלוטין מהתאריך הנוכחי. היומן של היום השגוי יתנקה לחלוטין.
+              </p>
+            </div>
+
+            {/* Conflict handling (If target date already has items) */}
+            <div className="p-3 rounded-2xl bg-pink-50/60 border border-pink-100 text-xs space-y-2">
+              <div className="flex items-center justify-between text-[11px] text-stone-700">
+                <span className="font-bold text-pink-950">אם כבר קיימים נתונים בתאריך היעד:</span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setTransferConflict('merge')}
+                    className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold cursor-pointer transition ${
+                      transferConflict === 'merge'
+                        ? 'bg-pink-600 text-white border-pink-600 shadow-2xs'
+                        : 'bg-white text-stone-600 border-stone-200 hover:bg-stone-50'
+                    }`}
+                  >
+                    מיזוג (Merge)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTransferConflict('replace')}
+                    className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold cursor-pointer transition ${
+                      transferConflict === 'replace'
+                        ? 'bg-pink-600 text-white border-pink-600 shadow-2xs'
+                        : 'bg-white text-stone-600 border-stone-200 hover:bg-stone-50'
+                    }`}
+                  >
+                    החלפה (Replace)
+                  </button>
+                </div>
+              </div>
+              <div className="text-[10px] text-stone-500">
+                {transferConflict === 'merge'
+                  ? 'מיזוג (מומלץ): מצרף את הדברים המועברים לפריטים שכבר קיימים בתאריך היעד.'
+                  : 'החלפה: מוחק את מה שקיים בתאריך היעד ומחליף אותו לחלוטין במה שהועבר.'}
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-pink-100">
+              <button
+                type="button"
+                onClick={() => setIsTransferModalOpen(false)}
+                className="px-3.5 py-1.5 rounded-xl border border-stone-200 text-xs font-semibold text-stone-600 hover:bg-stone-50 transition cursor-pointer"
+              >
+                ביטול
+              </button>
+              <button
+                type="button"
+                disabled={!transferTargetDate || transferTargetDate === selectedDate}
+                onClick={handleExecuteTransfer}
+                className="px-4 py-2 rounded-xl bg-pink-600 hover:bg-pink-700 disabled:opacity-40 text-white text-xs font-bold transition cursor-pointer shadow-xs flex items-center gap-1.5"
+              >
+                <ArrowRightLeft className="w-3.5 h-3.5" />
+                <span>העבר את כל נתוני היום ✈️</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Dialog for Event Deletion (Workspace API Safe Guard) */}
+      {eventPendingDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in" dir="ltr">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl border border-rose-200 space-y-3.5 text-stone-800">
+            <div className="flex items-center gap-2.5 text-rose-700">
+              <div className="p-2 rounded-xl bg-rose-100">
+                <CalendarIcon className="w-5 h-5 text-rose-600" />
+              </div>
+              <h4 className="font-bold text-sm">Delete Event?</h4>
+            </div>
+
+            <p className="text-xs text-stone-600 leading-relaxed">
+              Are you sure you want to delete <span className="font-bold text-stone-900">"{eventPendingDelete.parsed.title}"</span>?
+              {isGcalConnected && (
+                <span className="block mt-1 text-rose-700 font-medium">
+                  This will also remove the event from your Google Calendar.
+                </span>
+              )}
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-rose-100">
+              <button
+                type="button"
+                onClick={() => setEventPendingDelete(null)}
+                className="px-3.5 py-1.5 rounded-xl border border-stone-200 text-xs font-semibold text-stone-600 hover:bg-stone-50 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleConfirmRemoveEvent(eventPendingDelete)}
+                className="px-4 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition cursor-pointer shadow-xs"
+              >
+                Delete Event
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 3-COLUMN PLANNER SPREAD (Exact layout matching Image 2 & 3) */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5 items-start">
         
@@ -1303,24 +1845,129 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                 <Clock className="w-3.5 h-3.5 text-pink-500" />
                 <span>Hourly Schedule</span>
               </h3>
-              <span className="text-sm">🎀</span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setIsAddingTimeSlot((prev) => !prev)}
+                  className="text-[10px] px-2 py-0.5 rounded-lg border font-semibold flex items-center gap-1 transition-all cursor-pointer bg-pink-50 hover:bg-pink-100 text-pink-700 border-pink-200 shadow-2xs"
+                  title="Add a custom hour/time slot to the schedule"
+                >
+                  <Plus className="w-3 h-3 text-pink-500" />
+                  <span>Add Hour</span>
+                </button>
+                <span className="text-sm">🎀</span>
+              </div>
             </div>
 
-            <div className="space-y-1.5 flex-1 overflow-y-auto max-h-[580px] pr-1 lined-paper">
-              {SCHEDULE_TIMES.map((timeStr) => (
-                <div key={timeStr} className="flex items-center gap-2 py-0.5">
-                  <span className="w-12 text-[10px] font-bold text-pink-700/80 font-mono text-left shrink-0">
-                    {timeStr}
-                  </span>
+            {/* Custom Time Slot Inline Adder */}
+            {isAddingTimeSlot && (
+              <div className="mb-2 p-2 rounded-xl bg-pink-50/70 border border-pink-200 space-y-2 animate-in fade-in">
+                <div className="flex items-center justify-between text-[10px] font-bold text-pink-900">
+                  <span>Add Time Slot (e.g. 8:30 AM, 12:30 PM, 14:15):</span>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingTimeSlot(false)}
+                    className="text-stone-400 hover:text-stone-700 text-xs px-1"
+                  >
+                    ✕
+                  </button>
+                </div>
+                {/* Quick suggestions */}
+                <div className="flex flex-wrap items-center gap-1">
+                  {['5:30 AM', '6:30 AM', '7:30 AM', '8:30 AM', '12:30 PM', '1:30 PM', '2:30 PM', '5:30 PM', '10:30 PM', '11:30 PM'].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => handleAddCustomTimeSlot(preset)}
+                      className="px-1.5 py-0.5 rounded-md bg-white hover:bg-pink-100 border border-pink-200 text-[9px] font-medium text-pink-800 transition cursor-pointer"
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+                {/* Free input */}
+                <div className="flex items-center gap-1.5 pt-0.5">
                   <input
                     type="text"
-                    value={schedule[timeStr] || ''}
-                    onChange={(e) => handleScheduleChange(timeStr, e.target.value)}
-                    placeholder="—"
-                    className="flex-1 px-2 py-0.5 text-xs bg-transparent border-b border-pink-100 focus:border-pink-400 focus:outline-none text-pink-950 placeholder:text-pink-200"
+                    autoFocus
+                    value={newCustomTimeInput}
+                    onChange={(e) => setNewCustomTimeInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddCustomTimeSlot();
+                      } else if (e.key === 'Escape') {
+                        setIsAddingTimeSlot(false);
+                      }
+                    }}
+                    placeholder="Type hour, e.g. 8:30 AM..."
+                    className="flex-1 px-2.5 py-1 text-xs bg-white rounded-lg border border-pink-200 focus:outline-none focus:border-pink-400 text-pink-950 shadow-2xs"
                   />
+                  <button
+                    type="button"
+                    onClick={() => handleAddCustomTimeSlot()}
+                    disabled={!newCustomTimeInput.trim()}
+                    className="px-2.5 py-1 rounded-lg bg-pink-500 hover:bg-pink-600 disabled:opacity-40 text-white text-xs font-semibold shadow-2xs transition cursor-pointer"
+                  >
+                    Add
+                  </button>
                 </div>
-              ))}
+              </div>
+            )}
+
+            <div className="space-y-1.5 flex-1 overflow-y-auto max-h-[620px] pr-1 lined-paper">
+              {allScheduleTimes.map((timeStr, index) => {
+                const noteValue = schedule[timeStr] || '';
+                const hasValue = Boolean(noteValue.trim());
+                const isCustomTime = !DEFAULT_SCHEDULE_TIMES.includes(timeStr);
+
+                return (
+                  <div key={timeStr} className="flex items-start gap-2 py-1 border-b border-pink-100/50 last:border-b-0 group">
+                    <div className="w-12 pt-1 shrink-0 flex items-center justify-between select-none">
+                      <span className={`text-[10px] font-bold font-mono text-left ${isCustomTime ? 'text-pink-600 font-semibold' : 'text-pink-700/80'}`}>
+                        {timeStr}
+                      </span>
+                      {hasValue && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-pink-400 shrink-0" title="Scheduled note" />
+                      )}
+                    </div>
+                    <textarea
+                      ref={(el) => {
+                        scheduleInputRefs.current[timeStr] = el;
+                      }}
+                      rows={1}
+                      value={noteValue}
+                      onChange={(e) => {
+                        handleScheduleChange(timeStr, e.target.value);
+                        autoResizeTextarea(e.target);
+                      }}
+                      onKeyDown={(e) => handleScheduleKeyDown(timeStr, index, e)}
+                      placeholder="—"
+                      className="flex-1 px-2.5 py-1 text-xs bg-pink-50/15 hover:bg-pink-50/30 focus:bg-white rounded-lg border border-pink-100/70 focus:border-pink-300 focus:outline-none focus:ring-1 focus:ring-pink-300 text-pink-950 placeholder:text-pink-300/70 resize-none leading-relaxed transition-all font-sans whitespace-pre-wrap break-words min-h-[28px] overflow-hidden"
+                    />
+                    {isCustomTime && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveCustomTimeSlot(timeStr)}
+                        className="opacity-0 group-hover:opacity-100 p-0.5 text-stone-300 hover:text-rose-500 transition cursor-pointer self-center"
+                        title="Remove custom time slot"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-2 pt-1.5 border-t border-pink-100/70 flex items-center justify-between text-[10px] text-pink-600/70">
+              <span className="flex items-center gap-1">
+                <span>💡</span>
+                <span>Use <kbd className="px-1 py-0.2 bg-pink-50 border border-pink-200 rounded font-mono text-[9px] text-pink-700 font-bold">↓</kbd> / <kbd className="px-1 py-0.2 bg-pink-50 border border-pink-200 rounded font-mono text-[9px] text-pink-700 font-bold">↑</kbd> to move between hours</span>
+              </span>
+              <span className="font-mono text-[9px] text-pink-400">
+                {Object.values(schedule).filter((v) => typeof v === 'string' && v.trim()).length}/{allScheduleTimes.length} booked
+              </span>
             </div>
           </div>
         </div>

@@ -3,8 +3,14 @@ import { isSameHebrewDayAndMonth } from './hebrewCalendar';
 
 const STORAGE_KEY = 'offline_personal_journal_v1';
 const VAULT_KEY = 'journal_emergency_recovery_vault';
+const PERMANENT_BACKUP_KEY = 'journal_permanent_vault_backup';
 const SNAPSHOTS_KEY = 'journal_automatic_snapshots_v1';
 const CORRUPTED_BACKUP_KEY = 'journal_corrupted_raw_backup';
+
+// Request persistent storage from Chrome/browser so Chrome never purges this site's data
+if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.persist) {
+  navigator.storage.persist().catch(() => {});
+}
 
 export interface StorageSnapshot {
   id: string;
@@ -171,7 +177,7 @@ export function scanAllStorageForJournals(): CandidateDatabase[] {
     try {
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === 'object') {
-        // Does it look like a journal database?
+        // Case 1: Standard JournalDatabase object
         const hasTasks = Array.isArray(parsed.tasks);
         const hasIdeas = Array.isArray(parsed.ideas);
         const hasDayLogs = Boolean(parsed.dayLogs && typeof parsed.dayLogs === 'object');
@@ -201,10 +207,78 @@ export function scanAllStorageForJournals(): CandidateDatabase[] {
             lastUpdated: validatedDb.lastUpdated,
             db: validatedDb,
           });
+          return;
+        }
+
+        // Case 2: Array directly (e.g. array of tasks or array of ideas)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const first = parsed[0];
+          if (first && typeof first === 'object') {
+            const isTasksArray = 'completed' in first || 'priority' in first;
+            const isIdeasArray = 'content' in first || 'tags' in first;
+
+            const validatedDb: JournalDatabase = {
+              version: 1,
+              tasks: isTasksArray ? parsed : [],
+              ideas: isIdeasArray ? parsed : [],
+              cycleLogs: {},
+              dayLogs: {},
+              habits: defaultHabits,
+              settings: defaultSettings,
+              lastUpdated: Date.now(),
+            };
+            const score = scoreUserData(validatedDb);
+            candidates.push({
+              sourceKey: key,
+              sourceType: type,
+              score: Math.max(score, 10),
+              taskCount: validatedDb.tasks.length,
+              ideaCount: validatedDb.ideas.length,
+              dayLogCount: 0,
+              cycleLogCount: 0,
+              lastUpdated: Date.now(),
+              db: validatedDb,
+            });
+            return;
+          }
         }
       }
     } catch {
-      // not JSON or not a journal, ignore
+      // not JSON, check if it's a raw note text
+      if (raw.length > 20 && (raw.includes(' ') || raw.includes('\n'))) {
+        const validatedDb: JournalDatabase = {
+          version: 1,
+          tasks: [],
+          ideas: [
+            {
+              id: `recovered-${Date.now()}`,
+              date: formatDateKey(),
+              title: `Recovered Note (${key})`,
+              content: raw,
+              category: 'Reflection',
+              tags: ['recovered'],
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+            },
+          ],
+          cycleLogs: {},
+          dayLogs: {},
+          habits: defaultHabits,
+          settings: defaultSettings,
+          lastUpdated: Date.now(),
+        };
+        candidates.push({
+          sourceKey: key,
+          sourceType: type,
+          score: 15,
+          taskCount: 0,
+          ideaCount: 1,
+          dayLogCount: 0,
+          cycleLogCount: 0,
+          lastUpdated: Date.now(),
+          db: validatedDb,
+        });
+      }
     }
   }
 
@@ -609,13 +683,23 @@ export function loadJournalDatabase(): JournalDatabase {
     }
 
     if (!parsed) {
+      // Check permanent backup key before initial
+      try {
+        const permRaw = localStorage.getItem(PERMANENT_BACKUP_KEY);
+        if (permRaw) {
+          parsed = JSON.parse(permRaw) as JournalDatabase;
+        }
+      } catch {}
+    }
+
+    if (!parsed) {
       const embedded = (window as unknown as { __STANDALONE_EMBEDDED_DATA__?: JournalDatabase }).__STANDALONE_EMBEDDED_DATA__;
       const initial = embedded || createInitialDatabase();
       saveJournalDatabase(initial);
       return initial;
     }
 
-    // ensure migrations or missing fields
+    // ensure migrations or missing fields without overwriting user data
     if (!parsed.settings) parsed.settings = defaultSettings;
     if (!parsed.settings.pinCode || parsed.settings.pinCode === '1234') {
       parsed.settings.pinCode = '2006';
@@ -632,12 +716,12 @@ export function loadJournalDatabase(): JournalDatabase {
     return parsed;
   } catch (err) {
     console.error('Failed to read from localStorage:', err);
-    // Before returning initial, check if vault has data
+    // Before returning initial, check if permanent vault has data
     try {
-      const vaultRaw = localStorage.getItem(VAULT_KEY);
-      if (vaultRaw) {
-        const vaultDb = JSON.parse(vaultRaw) as JournalDatabase;
-        if (scoreUserData(vaultDb) > 0) return vaultDb;
+      const permRaw = localStorage.getItem(PERMANENT_BACKUP_KEY) || localStorage.getItem(VAULT_KEY);
+      if (permRaw) {
+        const vaultDb = JSON.parse(permRaw) as JournalDatabase;
+        return vaultDb;
       }
     } catch {
       // ignore
@@ -651,13 +735,10 @@ export function saveJournalDatabase(db: JournalDatabase): void {
     db.lastUpdated = Date.now();
     const jsonStr = JSON.stringify(db);
     localStorage.setItem(STORAGE_KEY, jsonStr);
-
-    const userScore = scoreUserData(db);
-    // If the database has real user content, protect it aggressively in the emergency vault & snapshots & IndexedDB
-    if (userScore > 0) {
-      localStorage.setItem(VAULT_KEY, jsonStr);
-      recordSnapshot(db, `Auto-saved (${db.tasks.length} tasks, ${db.ideas.length} notes)`);
-    }
+    // Always guard with permanent redundancy keys
+    localStorage.setItem(VAULT_KEY, jsonStr);
+    localStorage.setItem(PERMANENT_BACKUP_KEY, jsonStr);
+    recordSnapshot(db, `Auto-saved (${db.tasks.length} tasks, ${db.ideas.length} notes)`);
 
     // Also persist asynchronously to IndexedDB
     saveToIndexedDB(db).catch(() => {});

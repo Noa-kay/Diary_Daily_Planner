@@ -17,7 +17,9 @@ import {
 import { 
   loadJournalDatabase, 
   saveJournalDatabase, 
-  formatDateKey 
+  formatDateKey,
+  parseEventItem,
+  formatEventItem
 } from './services/storage';
 import { BookContainer } from './components/BookContainer';
 import { MonthlyBookSpread } from './components/MonthlyBookSpread';
@@ -34,6 +36,7 @@ import { useTimeReminders } from './hooks/useTimeReminders';
 import { useInactivityLock } from './hooks/useInactivityLock';
 import { ReminderChimeAlert } from './components/ReminderChimeAlert';
 import { scoreUserData } from './services/storage';
+import { initAuth, syncMoveEvents } from './services/googleCalendarService';
 
 export default function App() {
   const [db, setDb] = useState<JournalDatabase>(() => loadJournalDatabase());
@@ -78,6 +81,11 @@ export default function App() {
   useEffect(() => {
     saveJournalDatabase(db);
   }, [db]);
+
+  // Initialize Google Workspace / Calendar auth listener
+  useEffect(() => {
+    initAuth();
+  }, []);
 
   // When clicking on a day in the monthly spread: open that day's page!
   const handleSelectDayAndOpenPage = (dateStr: string) => {
@@ -128,6 +136,208 @@ export default function App() {
         tasks: [...cloned, ...prev.tasks],
       };
     });
+    setSelectedDate(toDate);
+  };
+
+  const handleTransferDay = (
+    fromDate: string,
+    toDate: string,
+    options?: {
+      conflict?: 'merge' | 'replace';
+    }
+  ) => {
+    if (!fromDate || !toDate || fromDate === toDate) return;
+    const conflict = options?.conflict ?? 'merge';
+
+    // Collect events that need to be moved to Google Calendar
+    const rawEventsToMove = db.dayLogs[fromDate]?.importantEvents || [];
+
+    setDb((prev) => {
+      // 1. Move ALL Tasks from fromDate to toDate (Strict Move - never copy!)
+      let updatedTasks = [...prev.tasks];
+      const sourceTasks = prev.tasks.filter((t) => t.date === fromDate);
+
+      if (sourceTasks.length > 0) {
+        if (conflict === 'replace') {
+          // In replace mode, wipe any prior tasks on target date
+          updatedTasks = updatedTasks.filter((t) => t.date !== toDate);
+        }
+
+        // Strictly re-assign all tasks from fromDate to toDate so none remain on fromDate
+        updatedTasks = updatedTasks.map((t) =>
+          t.date === fromDate ? { ...t, date: toDate } : t
+        );
+      }
+
+      // 2. DayLog
+      const updatedDayLogs = { ...prev.dayLogs };
+      const sourceDayLog = prev.dayLogs[fromDate];
+      const targetDayLog = prev.dayLogs[toDate] || { date: toDate };
+
+      // Process importantEvents:
+      // Update any recurrence anchor tags to toDate so events NEVER recur or show on fromDate!
+      const rawSourceEvents = sourceDayLog?.importantEvents || [];
+      const movedSourceEvents = rawSourceEvents.map((raw) => {
+        const parsed = parseEventItem(raw);
+        return formatEventItem(parsed.icon, parsed.title, parsed.recurrence, toDate);
+      });
+
+      // Also scan other dayLogs: if any event anywhere had recurrence pointing to fromDate, update it to toDate
+      for (const [dKey, dLog] of Object.entries(updatedDayLogs)) {
+        if (dKey === fromDate) continue;
+        if (dLog.importantEvents && dLog.importantEvents.length > 0) {
+          dLog.importantEvents = dLog.importantEvents.map((raw) => {
+            const parsed = parseEventItem(raw);
+            if (parsed.originalDate === fromDate) {
+              return formatEventItem(parsed.icon, parsed.title, parsed.recurrence, toDate);
+            }
+            return raw;
+          });
+        }
+      }
+
+      // Merge or replace important events on toDate
+      let targetEvents: string[];
+      if (conflict === 'replace') {
+        targetEvents = movedSourceEvents;
+      } else {
+        const existing = targetDayLog.importantEvents || [];
+        const mergedList = [...existing];
+        for (const ev of movedSourceEvents) {
+          const p = parseEventItem(ev);
+          if (!mergedList.some((ex) => parseEventItem(ex).title.trim().toLowerCase() === p.title.trim().toLowerCase())) {
+            mergedList.push(ev);
+          }
+        }
+        targetEvents = mergedList;
+      }
+
+      // Schedule merging
+      let newSchedule: Record<string, string>;
+      if (conflict === 'replace') {
+        newSchedule = { ...(sourceDayLog?.schedule || {}) };
+      } else {
+        newSchedule = { ...(targetDayLog.schedule || {}) };
+        for (const [hour, text] of Object.entries(sourceDayLog?.schedule || {})) {
+          if (text && text.trim()) {
+            if (newSchedule[hour] && newSchedule[hour].trim()) {
+              if (!newSchedule[hour].includes(text.trim())) {
+                newSchedule[hour] = `${newSchedule[hour]} | ${text.trim()}`;
+              }
+            } else {
+              newSchedule[hour] = text;
+            }
+          }
+        }
+      }
+
+      // Top priorities
+      const newTopPriorities: [string, string, string] = conflict === 'replace'
+        ? (sourceDayLog?.topPriorities || ['', '', ''])
+        : [
+            targetDayLog.topPriorities?.[0] || sourceDayLog?.topPriorities?.[0] || '',
+            targetDayLog.topPriorities?.[1] || sourceDayLog?.topPriorities?.[1] || '',
+            targetDayLog.topPriorities?.[2] || sourceDayLog?.topPriorities?.[2] || '',
+          ];
+
+      // Gratitude
+      const newGratitude = conflict === 'replace'
+        ? sourceDayLog?.gratitude
+        : targetDayLog.gratitude
+          ? (sourceDayLog?.gratitude ? `${targetDayLog.gratitude}\n${sourceDayLog.gratitude}` : targetDayLog.gratitude)
+          : sourceDayLog?.gratitude;
+
+      // Daily Note
+      const newDailyNote = conflict === 'replace'
+        ? sourceDayLog?.dailyNote
+        : targetDayLog.dailyNote
+          ? (sourceDayLog?.dailyNote ? `${targetDayLog.dailyNote}\n${sourceDayLog.dailyNote}` : targetDayLog.dailyNote)
+          : sourceDayLog?.dailyNote;
+
+      // Daily Thoughts
+      const newDailyThoughts = conflict === 'replace'
+        ? sourceDayLog?.dailyThoughts
+        : targetDayLog.dailyThoughts
+          ? (sourceDayLog?.dailyThoughts ? `${targetDayLog.dailyThoughts}\n${sourceDayLog.dailyThoughts}` : targetDayLog.dailyThoughts)
+          : sourceDayLog?.dailyThoughts;
+
+      // Habits progress
+      const newHabits = {
+        ...(sourceDayLog?.habitsProgress || {}),
+        ...(targetDayLog.habitsProgress || {}),
+      };
+
+      // Wit items
+      const newWit = conflict === 'replace'
+        ? (sourceDayLog?.witItems || [])
+        : [
+            ...(targetDayLog.witItems || []),
+            ...(sourceDayLog?.witItems || []).filter(
+              (si) => !(targetDayLog.witItems || []).some((ti) => ti.text === si.text)
+            ),
+          ];
+
+      const newTargetDayLog: DayLog = {
+        ...targetDayLog,
+        ...(sourceDayLog ? sourceDayLog : {}),
+        date: toDate,
+        importantEvents: targetEvents,
+        schedule: newSchedule,
+        topPriorities: newTopPriorities,
+        gratitude: newGratitude,
+        dailyNote: newDailyNote,
+        dailyThoughts: newDailyThoughts,
+        habitsProgress: newHabits,
+        witItems: newWit,
+        dailyAffirmation: conflict === 'replace' ? sourceDayLog?.dailyAffirmation : (targetDayLog.dailyAffirmation || sourceDayLog?.dailyAffirmation),
+        middayCheckIn: conflict === 'replace' ? sourceDayLog?.middayCheckIn : (targetDayLog.middayCheckIn || sourceDayLog?.middayCheckIn),
+        mood: conflict === 'replace' ? sourceDayLog?.mood : (targetDayLog.mood || sourceDayLog?.mood),
+        energyLevel: conflict === 'replace' ? sourceDayLog?.energyLevel : (targetDayLog.energyLevel || sourceDayLog?.energyLevel),
+        meals: {
+          breakfast: conflict === 'replace' ? sourceDayLog?.meals?.breakfast : (targetDayLog.meals?.breakfast || sourceDayLog?.meals?.breakfast),
+          lunch: conflict === 'replace' ? sourceDayLog?.meals?.lunch : (targetDayLog.meals?.lunch || sourceDayLog?.meals?.lunch),
+          dinner: conflict === 'replace' ? sourceDayLog?.meals?.dinner : (targetDayLog.meals?.dinner || sourceDayLog?.meals?.dinner),
+          snack: conflict === 'replace' ? sourceDayLog?.meals?.snack : (targetDayLog.meals?.snack || sourceDayLog?.meals?.snack),
+        },
+        accomplishments: conflict === 'replace'
+          ? (sourceDayLog?.accomplishments || [])
+          : Array.from(new Set([...(targetDayLog.accomplishments || []), ...(sourceDayLog?.accomplishments || [])])),
+        selfCare: conflict === 'replace'
+          ? (sourceDayLog?.selfCare || [])
+          : Array.from(new Set([...(targetDayLog.selfCare || []), ...(sourceDayLog?.selfCare || [])])),
+      };
+
+      updatedDayLogs[toDate] = newTargetDayLog;
+
+      // STRICT MOVE: Completely purge source day from dayLogs so nothing stays behind
+      delete updatedDayLogs[fromDate];
+
+      // 3. Move CycleLog if any
+      const updatedCycleLogs = { ...prev.cycleLogs };
+      if (prev.cycleLogs[fromDate]) {
+        updatedCycleLogs[toDate] = {
+          ...prev.cycleLogs[fromDate],
+          date: toDate,
+        };
+        delete updatedCycleLogs[fromDate];
+      }
+
+      return {
+        ...prev,
+        tasks: updatedTasks,
+        dayLogs: updatedDayLogs,
+        cycleLogs: updatedCycleLogs,
+        lastUpdated: Date.now(),
+      };
+    });
+
+    // Move events in Google Calendar / offline queue
+    if (rawEventsToMove.length > 0) {
+      syncMoveEvents(fromDate, toDate, rawEventsToMove).catch((err) => {
+        console.warn('GCal sync move error:', err);
+      });
+    }
+
     setSelectedDate(toDate);
   };
 
@@ -333,6 +543,7 @@ export default function App() {
                 habits={db.habits}
                 settings={db.settings}
                 onOpenJokesDigest={() => setCurrentView('jokes-digest')}
+                onTransferDay={handleTransferDay}
               />
             )}
 

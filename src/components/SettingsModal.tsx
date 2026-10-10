@@ -19,6 +19,7 @@ import {
 import { AppTheme, AppSettings, JournalDatabase } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
 import { exportToJsonFile, exportStandaloneHtmlFile, importFromJsonFile } from '../services/storage';
+import { GoogleCalendarSyncCard } from './GoogleCalendarSyncCard';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -258,7 +259,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
 
-          {/* 3. Audio, Desktop App & Print */}
+          {/* 3. Google Calendar Integration */}
+          <GoogleCalendarSyncCard
+            database={database}
+            onShowMessage={(msg) => {
+              setStatusMsg(msg);
+              setTimeout(() => setStatusMsg(null), 3500);
+            }}
+          />
+
+          {/* 4. Audio, Desktop App & Print */}
           <div className="grid grid-cols-3 gap-2">
             {/* Chime */}
             <button
