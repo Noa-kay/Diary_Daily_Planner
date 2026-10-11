@@ -1,129 +1,70 @@
-# 🌸 Diary Daily Planner — Aesthetic Personal Journal
+# 🌸 My Daily Planner & Journal
 
-<p align="center">
-  <b>יומן אישי מעוצב, חודשי ויומי • 100% אופליין וללא צורך באינטרנט</b><br>
-  <i>A chic, private, offline-first personal digital planner in soft pastel blush pink with realistic 3D book flip physics, Hebrew & Gregorian calendar, tasks, habits, and daily reflections.</i>
-</p>
+> A chic, private, offline-first personal digital planner in soft pastel pink with realistic 3D book cover, monthly & Hebrew calendar, tasks, habits, and daily reflections.
 
-<p align="center">
+<p align="left">
   <img src="https://img.shields.io/badge/React-19-pink?style=flat-square&logo=react" alt="React 19" />
   <img src="https://img.shields.io/badge/Vite-8-purple?style=flat-square&logo=vite" alt="Vite" />
-  <img src="https://img.shields.io/badge/TailwindCSS-v4-38bdf8?style=flat-square&logo=tailwindcss" alt="Tailwind CSS" />
-  <img src="https://img.shields.io/badge/Hebrew_Calendar-Hebcal-amber?style=flat-square" alt="Hebcal" />
-  <img src="https://img.shields.io/badge/Storage-100%25_Local_&_Offline-emerald?style=flat-square" alt="100% Offline" />
-  <img src="https://img.shields.io/badge/PWA-Installable-rose?style=flat-square" alt="PWA Ready" />
+  <img src="https://img.shields.io/badge/TailwindCSS-v4-38bdf8?style=flat-square&logo=tailwindcss" alt="Tailwind" />
+  <img src="https://img.shields.io/badge/Storage-100%25_Offline-emerald?style=flat-square" alt="Offline" />
+  <img src="https://img.shields.io/badge/PWA-Installable-rose?style=flat-square" alt="PWA" />
 </p>
 
 ---
 
-## 🚀 הורדה והרצה מהירה על המחשב (Quick Start)
+## ⚡ Quick Start
 
-ניתן להריץ את היומן ישירות מהמחשב שלך ללא תלות באינטרנט:
+Run locally on your computer (100% offline):
 
 ```bash
-# 1. שכפול הפרויקט מה-GitHub למחשב
 git clone https://github.com/Noa-kay/Diary_Daily_Planner.git
-
-# 2. כניסה לתיקיית הפרויקט
 cd Diary_Daily_Planner
-
-# 3. התקנת הספריות הנדרשות
 npm install --legacy-peer-deps
-
-# 4. הפעלת היומן מקומית
 npm run dev
 ```
 
-לאחר ההפעלה, פתחו את הדפדפן (Chrome / Safari) בכתובת:  
-👉 **`http://localhost:3000`**
+Open **`http://localhost:3000`** in your browser.
 
 ---
 
-## ✨ תכונות עיקריות (Key Features)
+## ✨ Features
 
-* **📖 כריכת תלת-ממד ריאליסטית (3D Book Flip):**
-  * פתיחה אותנטית המסתובבת 175° סביב שדרת הספירלה השמאלית וחשיפת הדפים הפנימיים.
-  * מנעול קומבינציה וקוד PIN פרטי להגנה על היומן (ברירת מחדל: `2006`).
-* **📅 פריסה חודשית עם לוח עברי ולועזי (Monthly Spread):**
-  * תאריכים עבריים מדויקים, חגים ומועדים, ראשי חודשים ופרשות שבוע בעזרת `@hebcal/core`.
-  * סנכרון אירועים חשובים מהדפים היומיים שמוצגים ישירות בתוך משבצות החודש.
-* **✍️ דף יומי עשיר (Daily Spread):**
-  * **⭐ אירועים חשובים וימי הולדת:** תיעוד אירועים עם אפשרות עריכה, מחיקה וסימון אייקונים.
-  * **🎯 סדר עדיפויות יומי:** הגדרת 3 המטרות המרכזיות להיום.
-  * **📋 רשימת משימות:** צ'קליסט משימות אינטראקטיבי עם אפקט קונפטי בסיום כל המשימות.
-  * **⏰ לוח זמנים שעתי (Hourly Schedule):** שורות מחברת קלאסיות מתרחבות אוטומטית רק לפי אורך הטקסט.
-  * **😂 מאגר בדיחות, פתגמים ומשפטים שאהבתי:** שמירת בדיחות בשורה אחת ואפשרות לצפייה בריכוז חודשי ושנתי לפי חודשי השנה העברית.
-  * **💧 מעקב שתיית מים והרגלים:** 8 כוסות מים ומעקב שגרת בריאות יומית.
-  * **🍽️ יומן תזונה וארוחות:** בוקר, צהריים, ערב, נשנושים ופינוק מתוק.
-  * **💭 מצב רוח, תודה יומית והרהורים:** תיעוד רגשות ומחשבות יומיות.
-* **💡 לוח רעיונות והשראות (Ideas Board):** לוח פתקיות מעוצב עם חלוקה לקטגוריות ותגיות.
-* **🌸 מעקב מחזור ובריאות (Wellness & Cycle):** מעקב דיסקרטי ועדין.
-* **🔒 פרטיות מוחלטת ואבטחה כפולה (Offline-First):**
-  * המידע נשמר אך ורק במכשיר שלך באמצעות שילוב כפול של `localStorage` ו-`IndexedDB`.
-  * שום נתון אישי לא נשלח לרשת, אין צורך ביצירת חשבון ואין מעקב.
-* **📦 גיבוי, שחזור וקובץ עצמאי (.html):**
-  * הורדת קובץ HTML עצמאי אחד המכיל את כל היומן ומאפשר פתיחה בלחיצה כפולה ללא שום שרת וללא אינטרנט.
-  * ייצוא ושחזור קובצי JSON מלאים בכל עת.
+- **📖 3D Book Experience:** Interactive book cover with authentic left-hinge 3D flip animation and private PIN code lock (`2006`).
+- **📅 Monthly Calendar:** Full month view with Hebrew & Gregorian calendar dates, Jewish holidays, and synced important events.
+- **✍️ Daily Spread:**
+  - **Important Events:** Birthdays, meetings, and occasions synced to the monthly calendar.
+  - **Priorities & Tasks:** Top 3 daily priorities and interactive checklist with celebration confetti.
+  - **Hourly Schedule:** Classic lined timeline that expands smoothly as you type.
+  - **Daily Wit & Jokes:** Single-line joke entries with Hebrew monthly summary treasury.
+  - **Habits & Wellness:** Water counter (8 cups), meals log, mood, daily gratitude, and reflections.
+- **💡 Ideas Board:** Aesthetic sticky-notes board with customizable categories.
+- **🌸 Cycle Tracker:** Discrete and gentle wellness & cycle log.
+- **🔒 Privacy First:** 100% offline. Stored securely on your device via `localStorage` and `IndexedDB`. Zero servers, no tracking.
 
 ---
 
-## 💻 התקנה כאפליקציית שולחן עבודה (Desktop App)
+## 💻 Run as a Desktop App
 
-### אפשרות 1: התקנת PWA ישירות מהדפדפן
-1. פתחו את היומן בדפדפן (Chrome / Edge / Safari).
-2. לחצו על כפתור **"התקן אפליקציה" 📲** בסרגל העליון (או על אייקון המחשב 🖥️ בסרגל הכתובות).
-3. **ב-Mac (Safari):** לחצו בתפריט העליון `File` ➔ `Add to Dock`.
-4. האפליקציה תופיע בשולחן העבודה / Dock ותיפתח בחלון עצמאי לחלוטין.
+1. **Install via Browser (PWA):**  
+   Click the **"Install App"** button in the header (or **File ➔ Add to Dock** in Mac Safari). Opens in an independent, clean window.
 
-### אפשרות 2: קובץ יומן עצמאי (Single HTML File)
-מתוך היומן, לחצו על **"התקן אפליקציה"** (או הגדרות ➔ גיבוי) ובחרו **"הורד קובץ יומן (.html)"**.  
-הקובץ שיירד מכיל את כל היומן שלכם ופועל בכל מחשב בלחיצה כפולה ללא צורך בשום חיבור רשת!
+2. **Standalone Single File (.html):**  
+   Click **Install App ➔ Download .html**. Save the file to your Desktop and double-click to run anytime without servers or internet.
 
 ---
 
-## 🛠️ טכנולוגיות (Tech Stack)
+## 🛠️ Built With
 
-* **UI & Core:** [React 19](https://react.dev/), [TypeScript](https://www.typescriptlang.org/)
-* **Build Tool:** [Vite 8](https://vitejs.dev/)
-* **Styling:** [Tailwind CSS v4](https://tailwindcss.com/)
-* **Icons:** [Lucide React](https://lucide.dev/)
-* **Hebrew Calendar API:** [@hebcal/core](https://github.com/hebcal/hebcal-es6)
-* **Animations & Effects:** [canvas-confetti](https://github.com/catdad/canvas-confetti), [Motion](https://motion.dev/)
-* **Offline & PWA:** [vite-plugin-pwa](https://vite-pwa-org.netlify.app/)
+- **React 19** + **TypeScript**
+- **Vite 8**
+- **Tailwind CSS v4**
+- **Hebcal API** (`@hebcal/core`)
+- **Vite PWA Plugin**
 
 ---
 
-## 📂 מבנה התיקיות (Project Structure)
+## 📜 License
 
-```text
-Diary_Daily_Planner/
-├── public/                     # אייקונים, קובצי PWA ו-standalone template
-├── src/
-│   ├── components/             # רכיבי הממשק
-│   │   ├── BookContainer.tsx      # מבנה היומן הראשי, הלשוניות והסרגל העליון
-│   │   ├── PlannerCover.tsx       # כריכת הספר התלת-ממדית ומנעול ה-PIN
-│   │   ├── MonthlyBookSpread.tsx  # פריסת לוח השנה החודשי והתאריכים העבריים
-│   │   ├── DayBookPage.tsx        # עמוד היומן היומי, לוח זמנים, משימות ובדיחות
-│   │   ├── JokesDigest.tsx        # מאגר וסיכום הבדיחות והפתגמים לפי חודש עברי
-│   │   ├── IdeasJournal.tsx       # לוח הפתקיות והרעיונות
-│   │   ├── CycleTracker.tsx       # יומן מעקב מחזור ובריאות
-│   │   ├── BackupModal.tsx        # חלון גיבויים, שחזור וקובץ עצמאי
-│   │   ├── RecoveryModal.tsx      # מרכז שחזור נתונים אוטומטי מזיכרון הדפדפן
-│   │   └── PWAInstallButton.tsx   # כפתור ומודל התקנת אפליקציה למחשב/נייד
-│   ├── services/
-│   │   ├── storage.ts             # מנגנוני אחסון, IndexedDB, גיבויים ושחזור
-│   │   ├── hebrewCalendar.ts      # חישובי תאריכים עבריים וחגים
-│   │   └── soundService.ts        # צליל פתיחה וצ'יימס עדין
-│   ├── types.ts                   # הגדרות טיפוסי TypeScript
-│   ├── App.tsx                    # רכיב האפליקציה הראשי
-│   └── main.tsx                   # נקודת כניסה
-├── package.json
-└── README.md
-```
+MIT License. Free to use and personalize! 🌸
 
----
-
-## 📜 רישיון ופרטיות (License & Privacy)
-
-קוד זה מופץ תחת רישיון MIT. כל הנתונים שלכם נשארים אך ורק במכשיר האישי שלכם — 100% פרטי, עצמאי ובטוח! 🌸
 
