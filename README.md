@@ -1,132 +1,129 @@
-# 🌸 My Planner — Aesthetic Daily & Wellness Journal
+# 🌸 Diary Daily Planner — Aesthetic Personal Journal
 
-> A chic, private, offline-first personal digital planner designed in soft pastel blush pinks with ribbon bookmarks, gold spiral spine, Hebrew calendar dates, daily schedule, habit tracking, and reflection board.
+<p align="center">
+  <b>יומן אישי מעוצב, חודשי ויומי • 100% אופליין וללא צורך באינטרנט</b><br>
+  <i>A chic, private, offline-first personal digital planner in soft pastel blush pink with realistic 3D book flip physics, Hebrew & Gregorian calendar, tasks, habits, and daily reflections.</i>
+</p>
 
-![Cover Aesthetic](https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/book-open.svg)
-
----
-
-## ✨ Features
-
-- **📖 3D Book Experience:** Open-book desk layout with spiral binding, ribbon bookmark, tabbed navigation, and pastel desk textures.
-- **📅 Monthly Calendar Spread:** Full interactive monthly calendar featuring both Gregorian dates and Hebrew dates (including Jewish holidays and Rosh Chodesh) powered by `@hebcal/core`.
-- **✍️ Today's Page (Daily Spread):**
-  - **⭐ Important Events & Occasions:** Dedicated section to record, edit (with inline pencil ✏️), and manage key dates, birthdays, appointments, and meetings that automatically sync and display the full text inside the day's square in the **Monthly Calendar**.
-  - **🔔 Gentle Audio Chime Reminders:** Soft melodic chime (synthesized offline via Web Audio API) notifying you when scheduled events or tasks approach their planned time, with one-click mute in the desk toolbar.
-  - **Today's Priorities:** Top 3 focus goals for the day.
-  - **To-Do List:** Checklist with celebratory confetti upon completing all tasks.
-  - **Hourly Time-Block Schedule:** 06:00 to 22:00 timeline planner.
-  - **Water & Habits Tracker:** 8-cup water tracker and daily wellness habits.
-  - **Meal & Nourishment Planner:** Breakfast, lunch, dinner, snacks, and sweet treats.
-  - **Mood & Daily Reflections:** Mood selector, daily gratitude, and daily thoughts.
-  - **Notes & Inspiration Strip:** Notes pad with pastel washi tape styling.
-- **💡 Ideas & Journal Board:** Aesthetic cork-style board with pastel sticky notes, categorized entries (Reflections, Projects, Inspirations, Creative Ideas), and writing prompts.
-- **🌸 Wellness & Cycle Tracker:** Subtle, discrete cycle and mood tracking with wellness reminders.
-- **🔒 PIN Code Privacy Lock:** Keep your private diary protected with an optional PIN lock.
-- **💾 100% Offline & Private (Zero-Cloud):** All diary data is stored locally in your browser/device `localStorage`. No accounts, no servers, zero data tracking.
-- **📦 Backup & Restore:** Export your complete journal as a standalone `.json` backup file or restore it anytime.
-- **🖨️ Print Ready:** Clean CSS print styles for printing daily pages onto paper.
+<p align="center">
+  <img src="https://img.shields.io/badge/React-19-pink?style=flat-square&logo=react" alt="React 19" />
+  <img src="https://img.shields.io/badge/Vite-8-purple?style=flat-square&logo=vite" alt="Vite" />
+  <img src="https://img.shields.io/badge/TailwindCSS-v4-38bdf8?style=flat-square&logo=tailwindcss" alt="Tailwind CSS" />
+  <img src="https://img.shields.io/badge/Hebrew_Calendar-Hebcal-amber?style=flat-square" alt="Hebcal" />
+  <img src="https://img.shields.io/badge/Storage-100%25_Local_&_Offline-emerald?style=flat-square" alt="100% Offline" />
+  <img src="https://img.shields.io/badge/PWA-Installable-rose?style=flat-square" alt="PWA Ready" />
+</p>
 
 ---
 
-## 💻 How to Install & Run as a Desktop App on Mac & Windows (Without Coding)
+## 🚀 הורדה והרצה מהירה על המחשב (Quick Start)
 
-You can run **My Planner** directly on your computer as a standalone desktop app that opens in its own window with an app icon on your Desktop or Dock.
-
-### Option 1: Chrome Standalone Desktop App (Recommended for Chrome Users)
-
-1. Open the planner in **Google Chrome**.
-2. Click the **three dots menu (⋮)** in the top right corner of Chrome.
-3. Hover over **Save and share** (שמירה ושיתוף) and click **Create shortcut...** (יצירת קיצור דרך...).
-4. In the dialog that pops up:
-   - Name it: `My Planner`
-   - ✅ **IMPORTANT:** Check the box: **"Open as window"** (פתח כחלון).
-5. Click **Create** (צור).
-
-> 🎉 **Done!** A native desktop app shortcut with the pink ribbon icon is created on your desktop / Mac Applications. Double-clicking it opens My Planner in its own independent window, completely separate from the browser. It works 100% offline even without internet.
-
----
-
-### Option 2: Running Locally from Source (For Developers)
-
-If you cloned this repository from GitHub and want to run it locally on your computer:
-
-#### Prerequisites
-- [Node.js](https://nodejs.org/) (version 18 or higher)
-- npm or pnpm / yarn
-
-#### Installation
+ניתן להריץ את היומן ישירות מהמחשב שלך ללא תלות באינטרנט:
 
 ```bash
-# Clone your repository
-git clone https://github.com/your-username/my-planner.git
-cd my-planner
+# 1. שכפול הפרויקט מה-GitHub למחשב
+git clone https://github.com/Noa-kay/Diary_Daily_Planner.git
 
-# Install dependencies
-npm install
+# 2. כניסה לתיקיית הפרויקט
+cd Diary_Daily_Planner
 
-# Start the local development server
+# 3. התקנת הספריות הנדרשות
+npm install --legacy-peer-deps
+
+# 4. הפעלת היומן מקומית
 npm run dev
 ```
 
-Open your browser at `http://localhost:3000`.
-
-#### Build for Production
-
-```bash
-# Create an optimized production build
-npm run build
-
-# Preview production build locally
-npm run preview
-```
+לאחר ההפעלה, פתחו את הדפדפן (Chrome / Safari) בכתובת:  
+👉 **`http://localhost:3000`**
 
 ---
 
-## 🛠️ Tech Stack
+## ✨ תכונות עיקריות (Key Features)
 
-- **Framework:** [React 19](https://react.dev/) with [TypeScript](https://www.typescriptlang.org/)
-- **Bundler:** [Vite](https://vitejs.dev/)
-- **Styling:** [Tailwind CSS v4](https://tailwindcss.com/)
-- **Icons:** [Lucide React](https://lucide.dev/)
-- **Calendar & Hebrew Dates:** [@hebcal/core](https://github.com/hebcal/hebcal-es6)
-- **Effects:** [canvas-confetti](https://github.com/catdad/canvas-confetti)
-- **PWA & Offline:** [vite-plugin-pwa](https://vite-pwa-org.netlify.app/)
+* **📖 כריכת תלת-ממד ריאליסטית (3D Book Flip):**
+  * פתיחה אותנטית המסתובבת 175° סביב שדרת הספירלה השמאלית וחשיפת הדפים הפנימיים.
+  * מנעול קומבינציה וקוד PIN פרטי להגנה על היומן (ברירת מחדל: `2006`).
+* **📅 פריסה חודשית עם לוח עברי ולועזי (Monthly Spread):**
+  * תאריכים עבריים מדויקים, חגים ומועדים, ראשי חודשים ופרשות שבוע בעזרת `@hebcal/core`.
+  * סנכרון אירועים חשובים מהדפים היומיים שמוצגים ישירות בתוך משבצות החודש.
+* **✍️ דף יומי עשיר (Daily Spread):**
+  * **⭐ אירועים חשובים וימי הולדת:** תיעוד אירועים עם אפשרות עריכה, מחיקה וסימון אייקונים.
+  * **🎯 סדר עדיפויות יומי:** הגדרת 3 המטרות המרכזיות להיום.
+  * **📋 רשימת משימות:** צ'קליסט משימות אינטראקטיבי עם אפקט קונפטי בסיום כל המשימות.
+  * **⏰ לוח זמנים שעתי (Hourly Schedule):** שורות מחברת קלאסיות מתרחבות אוטומטית רק לפי אורך הטקסט.
+  * **😂 מאגר בדיחות, פתגמים ומשפטים שאהבתי:** שמירת בדיחות בשורה אחת ואפשרות לצפייה בריכוז חודשי ושנתי לפי חודשי השנה העברית.
+  * **💧 מעקב שתיית מים והרגלים:** 8 כוסות מים ומעקב שגרת בריאות יומית.
+  * **🍽️ יומן תזונה וארוחות:** בוקר, צהריים, ערב, נשנושים ופינוק מתוק.
+  * **💭 מצב רוח, תודה יומית והרהורים:** תיעוד רגשות ומחשבות יומיות.
+* **💡 לוח רעיונות והשראות (Ideas Board):** לוח פתקיות מעוצב עם חלוקה לקטגוריות ותגיות.
+* **🌸 מעקב מחזור ובריאות (Wellness & Cycle):** מעקב דיסקרטי ועדין.
+* **🔒 פרטיות מוחלטת ואבטחה כפולה (Offline-First):**
+  * המידע נשמר אך ורק במכשיר שלך באמצעות שילוב כפול של `localStorage` ו-`IndexedDB`.
+  * שום נתון אישי לא נשלח לרשת, אין צורך ביצירת חשבון ואין מעקב.
+* **📦 גיבוי, שחזור וקובץ עצמאי (.html):**
+  * הורדת קובץ HTML עצמאי אחד המכיל את כל היומן ומאפשר פתיחה בלחיצה כפולה ללא שום שרת וללא אינטרנט.
+  * ייצוא ושחזור קובצי JSON מלאים בכל עת.
 
 ---
 
-## 📁 Project Structure
+## 💻 התקנה כאפליקציית שולחן עבודה (Desktop App)
+
+### אפשרות 1: התקנת PWA ישירות מהדפדפן
+1. פתחו את היומן בדפדפן (Chrome / Edge / Safari).
+2. לחצו על כפתור **"התקן אפליקציה" 📲** בסרגל העליון (או על אייקון המחשב 🖥️ בסרגל הכתובות).
+3. **ב-Mac (Safari):** לחצו בתפריט העליון `File` ➔ `Add to Dock`.
+4. האפליקציה תופיע בשולחן העבודה / Dock ותיפתח בחלון עצמאי לחלוטין.
+
+### אפשרות 2: קובץ יומן עצמאי (Single HTML File)
+מתוך היומן, לחצו על **"התקן אפליקציה"** (או הגדרות ➔ גיבוי) ובחרו **"הורד קובץ יומן (.html)"**.  
+הקובץ שיירד מכיל את כל היומן שלכם ופועל בכל מחשב בלחיצה כפולה ללא צורך בשום חיבור רשת!
+
+---
+
+## 🛠️ טכנולוגיות (Tech Stack)
+
+* **UI & Core:** [React 19](https://react.dev/), [TypeScript](https://www.typescriptlang.org/)
+* **Build Tool:** [Vite 8](https://vitejs.dev/)
+* **Styling:** [Tailwind CSS v4](https://tailwindcss.com/)
+* **Icons:** [Lucide React](https://lucide.dev/)
+* **Hebrew Calendar API:** [@hebcal/core](https://github.com/hebcal/hebcal-es6)
+* **Animations & Effects:** [canvas-confetti](https://github.com/catdad/canvas-confetti), [Motion](https://motion.dev/)
+* **Offline & PWA:** [vite-plugin-pwa](https://vite-pwa-org.netlify.app/)
+
+---
+
+## 📂 מבנה התיקיות (Project Structure)
 
 ```text
-my-planner/
-├── public/               # Static assets (icons, manifest)
+Diary_Daily_Planner/
+├── public/                     # אייקונים, קובצי PWA ו-standalone template
 ├── src/
-│   ├── components/       # UI Components
-│   │   ├── BookContainer.tsx      # Main notebook layout & desk frame
-│   │   ├── DayBookPage.tsx        # Daily planner spread
-│   │   ├── MonthlyBookSpread.tsx  # Monthly calendar with Hebrew dates
-│   │   ├── IdeasJournal.tsx       # Creative ideas & reflections board
-│   │   ├── CycleTracker.tsx       # Wellness & cycle tracking
-│   │   ├── PlannerCover.tsx       # 3D interactive book cover
-│   │   ├── BackupModal.tsx        # JSON backup and restore modal
-│   │   └── PinLockModal.tsx       # Privacy PIN protection
+│   ├── components/             # רכיבי הממשק
+│   │   ├── BookContainer.tsx      # מבנה היומן הראשי, הלשוניות והסרגל העליון
+│   │   ├── PlannerCover.tsx       # כריכת הספר התלת-ממדית ומנעול ה-PIN
+│   │   ├── MonthlyBookSpread.tsx  # פריסת לוח השנה החודשי והתאריכים העבריים
+│   │   ├── DayBookPage.tsx        # עמוד היומן היומי, לוח זמנים, משימות ובדיחות
+│   │   ├── JokesDigest.tsx        # מאגר וסיכום הבדיחות והפתגמים לפי חודש עברי
+│   │   ├── IdeasJournal.tsx       # לוח הפתקיות והרעיונות
+│   │   ├── CycleTracker.tsx       # יומן מעקב מחזור ובריאות
+│   │   ├── BackupModal.tsx        # חלון גיבויים, שחזור וקובץ עצמאי
+│   │   ├── RecoveryModal.tsx      # מרכז שחזור נתונים אוטומטי מזיכרון הדפדפן
+│   │   └── PWAInstallButton.tsx   # כפתור ומודל התקנת אפליקציה למחשב/נייד
 │   ├── services/
-│   │   └── storage.ts             # LocalStorage database & migrations
-│   ├── types.ts                   # TypeScript interfaces & types
-│   ├── App.tsx                    # Root application component
-│   └── main.tsx                   # React DOM entry point
+│   │   ├── storage.ts             # מנגנוני אחסון, IndexedDB, גיבויים ושחזור
+│   │   ├── hebrewCalendar.ts      # חישובי תאריכים עבריים וחגים
+│   │   └── soundService.ts        # צליל פתיחה וצ'יימס עדין
+│   ├── types.ts                   # הגדרות טיפוסי TypeScript
+│   ├── App.tsx                    # רכיב האפליקציה הראשי
+│   └── main.tsx                   # נקודת כניסה
 ├── package.json
 └── README.md
 ```
 
 ---
 
-## 🛡️ Privacy & Security
+## 📜 רישיון ופרטיות (License & Privacy)
 
-Your thoughts and personal entries belong strictly to you. **My Planner** never sends data over the internet. Everything stays on the local device where it was entered.
+קוד זה מופץ תחת רישיון MIT. כל הנתונים שלכם נשארים אך ורק במכשיר האישי שלכם — 100% פרטי, עצמאי ובטוח! 🌸
 
----
-
-## 📜 License
-
-MIT License. Free to use, personalize, and enjoy! 🌸
