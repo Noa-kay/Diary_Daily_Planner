@@ -11,8 +11,19 @@ import firebaseConfig from '../../firebase-applet-config.json';
 import { DayLog, JournalDatabase } from '../types';
 import { parseEventItem } from './storage';
 
+// Safe configuration prioritizing environment variables if present
+const resolvedFirebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || firebaseConfig.apiKey,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || firebaseConfig.authDomain,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || firebaseConfig.projectId,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || firebaseConfig.storageBucket,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseConfig.messagingSenderId,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || firebaseConfig.appId,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || firebaseConfig.measurementId,
+};
+
 // Initialize Firebase App
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+const app = getApps().length > 0 ? getApp() : initializeApp(resolvedFirebaseConfig);
 export const auth = getAuth(app);
 
 const provider = new GoogleAuthProvider();
@@ -409,14 +420,19 @@ export async function syncEventAction(
   const isOnline = navigator.onLine;
   const isAuth = !!cachedAccessToken;
 
-  // If offline or not signed in, queue action
+  // If offline or not signed in, queue action if authenticated, or silently skip if not connected
   if (!isOnline || !isAuth) {
-    enqueueCalendarAction(action, date, title, rawEventText, existingGoogleId);
+    if (isAuth && !isOnline) {
+      enqueueCalendarAction(action, date, title, rawEventText, existingGoogleId);
+      return {
+        status: 'queued',
+        message: 'Saved offline. Will sync to Google Calendar once connected ⏳',
+      };
+    }
+    // Not signed into Google: silent local behavior (do not nag user)
     return {
-      status: 'queued',
-      message: isOnline
-        ? 'Sign in to Google to sync events with your calendar'
-        : 'Saved offline. Will sync to Google Calendar once connected ⏳',
+      status: 'skipped',
+      message: '',
     };
   }
 

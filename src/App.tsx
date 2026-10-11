@@ -17,6 +17,7 @@ import {
 import { 
   loadJournalDatabase, 
   saveJournalDatabase, 
+  loadFromIndexedDB,
   formatDateKey,
   parseEventItem,
   formatEventItem
@@ -85,6 +86,20 @@ export default function App() {
   // Initialize Google Workspace / Calendar auth listener
   useEffect(() => {
     initAuth();
+  }, []);
+
+  // Dual-persistence auto recovery: If localStorage was cleared or partitioned by browser, restore from IndexedDB
+  useEffect(() => {
+    loadFromIndexedDB().then((idbDb) => {
+      if (idbDb) {
+        const idbScore = scoreUserData(idbDb);
+        const currentScore = scoreUserData(db);
+        if (idbScore > currentScore) {
+          console.info('Auto-recovered saved journal from IndexedDB!');
+          setDb(idbDb);
+        }
+      }
+    }).catch(() => {});
   }, []);
 
   // When clicking on a day in the monthly spread: open that day's page!

@@ -330,8 +330,8 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
   const autoResizeTextarea = (el: HTMLTextAreaElement | null) => {
     if (!el) return;
     el.style.height = 'auto';
-    // Clean compact default height of 28px (single line). Expands dynamically only if content needs more height!
-    const targetHeight = Math.max(el.scrollHeight, 28);
+    // Classic single-line height of 22px. Expands only when more lines/text are entered!
+    const targetHeight = Math.max(el.scrollHeight, 22);
     el.style.height = `${targetHeight}px`;
   };
 
@@ -339,9 +339,7 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
     allScheduleTimes.forEach((timeStr) => {
       const el = scheduleInputRefs.current[timeStr];
       if (el) {
-        el.style.height = 'auto';
-        const targetHeight = Math.max(el.scrollHeight, 28);
-        el.style.height = `${targetHeight}px`;
+        autoResizeTextarea(el);
       }
     });
   }, [selectedDate, schedule, allScheduleTimes]);
@@ -630,13 +628,38 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
   };
 
   const handleConfirmRemoveEvent = async (item: DayEventItem) => {
-    const targetDateForRemoval = item.originalDate || selectedDate;
-    const sourceLogEvents =
-      (allDayLogs && allDayLogs[targetDateForRemoval]?.importantEvents) ||
-      (targetDateForRemoval === selectedDate ? importantEvents : []);
-    const updated = sourceLogEvents.filter((e) => e !== item.evt);
-    onUpdateDayLog(targetDateForRemoval, { importantEvents: updated });
-    
+    // Matches event either by exact raw string or matching clean title
+    const isTargetEvent = (rawEvt: string): boolean => {
+      if (rawEvt === item.evt) return true;
+      const parsed = parseEventItem(rawEvt);
+      const titleA = (parsed.title || '').trim().toLowerCase();
+      const titleB = (item.parsed.title || '').trim().toLowerCase();
+      return Boolean(titleA && titleA === titleB);
+    };
+
+    // 1. Remove from currently selected day
+    const currentDayEvents = (allDayLogs && allDayLogs[selectedDate]?.importantEvents) || importantEvents || [];
+    const updatedCurrent = currentDayEvents.filter((e) => !isTargetEvent(e));
+    onUpdateDayLog(selectedDate, { importantEvents: updatedCurrent });
+
+    // 2. If it was recurring from another date, remove from that date too so it won't reappear
+    if (item.originalDate && item.originalDate !== selectedDate) {
+      const origDayEvents = (allDayLogs && allDayLogs[item.originalDate]?.importantEvents) || [];
+      const updatedOrig = origDayEvents.filter((e) => !isTargetEvent(e));
+      onUpdateDayLog(item.originalDate, { importantEvents: updatedOrig });
+    }
+
+    // 3. Scan allDayLogs to clean any other references
+    if (allDayLogs) {
+      Object.entries(allDayLogs).forEach(([dKey, dLog]) => {
+        if (dKey === selectedDate || dKey === item.originalDate) return;
+        if (dLog?.importantEvents && dLog.importantEvents.some(isTargetEvent)) {
+          const cleaned = dLog.importantEvents.filter((e) => !isTargetEvent(e));
+          onUpdateDayLog(dKey, { importantEvents: cleaned });
+        }
+      });
+    }
+
     if (editingEventIndex !== null) {
       setEditingEventIndex(null);
       setEditingPickerOpen(false);
@@ -647,13 +670,17 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
     }
     setEventPendingDelete(null);
 
-    // Sync delete to Google Calendar
+    // Sync delete to Google Calendar only if user is actually connected
     try {
+      const isConnected = isCalendarConnected();
+      const targetDateForRemoval = item.originalDate || selectedDate;
       const syncRes = await syncEventAction('delete', targetDateForRemoval, item.evt, item.parsed.title);
-      setGcalStatusMsg(syncRes.message);
-      setTimeout(() => setGcalStatusMsg(null), 3500);
+      if (isConnected && syncRes.message) {
+        setGcalStatusMsg(syncRes.message);
+        setTimeout(() => setGcalStatusMsg(null), 3500);
+      }
     } catch (err) {
-      console.warn(err);
+      console.warn('GCal delete error:', err);
     }
   };
 
@@ -742,6 +769,9 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
     if (!witText.trim()) return;
 
     const currentWits = dayLog?.witItems || [];
+    // For jokes, only one line is needed (no separate punchline)
+    const savedPunchline = witType === 'joke' ? '' : witPunchline.trim();
+
     if (editingWitId) {
       const updated = currentWits.map((w) =>
         w.id === editingWitId
@@ -749,7 +779,7 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
               ...w,
               type: witType,
               text: witText.trim(),
-              meaningOrPunchline: witPunchline.trim(),
+              meaningOrPunchline: savedPunchline,
             }
           : w
       );
@@ -759,7 +789,7 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
         id: `wit-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
         type: witType,
         text: witText.trim(),
-        meaningOrPunchline: witPunchline.trim(),
+        meaningOrPunchline: savedPunchline,
         createdAt: Date.now(),
       };
       onUpdateDayLog(selectedDate, { witItems: [...currentWits, newItem] });
@@ -785,14 +815,23 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
   const handleStartEditWit = (item: DailyWitItem) => {
     setEditingWitId(item.id);
     setWitType(item.type);
-    setWitText(item.text);
-    setWitPunchline(item.meaningOrPunchline || '');
+    if (item.type === 'joke' && item.meaningOrPunchline) {
+      // If an existing joke had a separate punchline, combine into a single sentence
+      const combined = item.text.includes(item.meaningOrPunchline)
+        ? item.text
+        : `${item.text} - ${item.meaningOrPunchline}`;
+      setWitText(combined);
+      setWitPunchline('');
+    } else {
+      setWitText(item.text);
+      setWitPunchline(item.meaningOrPunchline || '');
+    }
     setIsAddingWit(true);
   };
 
   const CURATED_WIT_SPARKS = [
-    { type: 'joke' as const, text: "Why don't eggs tell jokes?", punchline: "Because they'd crack each other up! 🥚😂" },
-    { type: 'joke' as const, text: "What do you call a sleeping dinosaur?", punchline: "A dino-snore! 💤" },
+    { type: 'joke' as const, text: "Why don't eggs tell jokes? Because they'd crack each other up! 🥚😂", punchline: "" },
+    { type: 'joke' as const, text: "What do you call a sleeping dinosaur? A dino-snore! 💤", punchline: "" },
     { type: 'idiom' as const, text: "Every cloud has a silver lining", punchline: "There is always something comforting or promising in every situation." },
     { type: 'idiom' as const, text: "Piece of cake", punchline: "Something wonderfully simple and sweet to accomplish." },
     { type: 'quote' as const, text: "A day without laughter is a day wasted.", punchline: "Charlie Chaplin" },
@@ -1922,8 +1961,8 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                 const isCustomTime = !DEFAULT_SCHEDULE_TIMES.includes(timeStr);
 
                 return (
-                  <div key={timeStr} className="flex items-start gap-2 py-1 border-b border-pink-100/50 last:border-b-0 group">
-                    <div className="w-12 pt-1 shrink-0 flex items-center justify-between select-none">
+                  <div key={timeStr} className="flex items-start gap-2 py-0.5 border-b border-pink-100/50 last:border-b-0 group">
+                    <div className="w-12 pt-0.5 shrink-0 flex items-center justify-between select-none">
                       <span className={`text-[10px] font-bold font-mono text-left ${isCustomTime ? 'text-pink-600 font-semibold' : 'text-pink-700/80'}`}>
                         {timeStr}
                       </span>
@@ -1942,8 +1981,8 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                         autoResizeTextarea(e.target);
                       }}
                       onKeyDown={(e) => handleScheduleKeyDown(timeStr, index, e)}
-                      placeholder="—"
-                      className="flex-1 px-2.5 py-1 text-xs bg-pink-50/15 hover:bg-pink-50/30 focus:bg-white rounded-lg border border-pink-100/70 focus:border-pink-300 focus:outline-none focus:ring-1 focus:ring-pink-300 text-pink-950 placeholder:text-pink-300/70 resize-none leading-relaxed transition-all font-sans whitespace-pre-wrap break-words min-h-[28px] overflow-hidden"
+                      placeholder=""
+                      className="flex-1 px-1.5 py-0.5 text-xs bg-transparent hover:bg-pink-50/20 focus:bg-pink-50/40 border-0 border-b border-pink-200/60 focus:border-pink-400 focus:outline-none text-pink-950 placeholder:text-pink-300 resize-none leading-5 transition-colors font-sans whitespace-pre-wrap break-words min-h-[22px] overflow-hidden"
                     />
                     {isCustomTime && (
                       <button
@@ -2433,16 +2472,22 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                 type="text"
                 value={witText}
                 onChange={(e) => setWitText(e.target.value)}
-                placeholder={witType === 'joke' ? "The setup or joke question..." : "The phrase or idiom..."}
+                placeholder={
+                  witType === 'joke'
+                    ? "The joke... 😂 (כתבו כאן את הבדיחה)"
+                    : "The phrase, quote or idiom..."
+                }
                 className="w-full p-2 text-xs bg-amber-50/20 rounded-xl border border-amber-200 focus:bg-white focus:outline-none focus:ring-1 focus:ring-amber-400 text-stone-900"
               />
-              <input
-                type="text"
-                value={witPunchline}
-                onChange={(e) => setWitPunchline(e.target.value)}
-                placeholder={witType === 'joke' ? "The punchline! 😂" : "What it means or author..."}
-                className="w-full p-2 text-xs bg-amber-50/20 rounded-xl border border-amber-200 focus:bg-white focus:outline-none focus:ring-1 focus:ring-amber-400 text-stone-900"
-              />
+              {witType !== 'joke' && (
+                <input
+                  type="text"
+                  value={witPunchline}
+                  onChange={(e) => setWitPunchline(e.target.value)}
+                  placeholder="Meaning, explanation, or author (optional)..."
+                  className="w-full p-2 text-xs bg-amber-50/20 rounded-xl border border-amber-200 focus:bg-white focus:outline-none focus:ring-1 focus:ring-amber-400 text-stone-900"
+                />
+              )}
             </div>
 
             <div className="flex justify-between items-center pt-1">

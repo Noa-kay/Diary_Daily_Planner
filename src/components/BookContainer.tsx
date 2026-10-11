@@ -86,8 +86,11 @@ export const BookContainer: React.FC<BookContainerProps> = ({
           <OfflineIndicator />
         </div>
 
-        {/* Right: Desk Controls - Icon-only buttons (Inspiration, Cover, Settings rightmost) */}
+        {/* Right: Desk Controls - Icon-only buttons (Install App, Inspiration, Cover, Settings rightmost) */}
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* PWA Install Button: Allows installing directly to desktop/phone */}
+          <PWAInstallButton />
+
           {/* 1. Daily Affirmation Sparkle Button */}
           <button
             onClick={() => setShowAffirmation(true)}
