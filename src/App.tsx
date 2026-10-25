@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   JournalDatabase, 
   BookView, 
@@ -11,6 +11,7 @@ import {
   IdeaEntry, 
   CycleDayLog, 
   DayLog, 
+  Habit,
   AppTheme,
   AppSettings
 } from './types';
@@ -75,11 +76,17 @@ export default function App() {
   const { activeAlert, dismissAlert, muteReminder, triggerTestSound } = useTimeReminders(
     db.tasks,
     db.dayLogs,
-    soundEnabled
+    soundEnabled,
+    db.habits
   );
 
-  // Automatically persist to localStorage
+  // Automatically persist to localStorage (skipping initial mount to prevent overwriting IndexedDB)
+  const isFirstMount = useRef(true);
   useEffect(() => {
+    if (isFirstMount.current) {
+      isFirstMount.current = false;
+      return;
+    }
     saveJournalDatabase(db);
   }, [db]);
 
@@ -94,9 +101,10 @@ export default function App() {
       if (idbDb) {
         const idbScore = scoreUserData(idbDb);
         const currentScore = scoreUserData(db);
-        if (idbScore > currentScore) {
+        if (idbScore > 0 && idbScore > currentScore) {
           console.info('Auto-recovered saved journal from IndexedDB!');
           setDb(idbDb);
+          saveJournalDatabase(idbDb);
         }
       }
     }).catch(() => {});
@@ -194,7 +202,7 @@ export default function App() {
       const rawSourceEvents = sourceDayLog?.importantEvents || [];
       const movedSourceEvents = rawSourceEvents.map((raw) => {
         const parsed = parseEventItem(raw);
-        return formatEventItem(parsed.icon, parsed.title, parsed.recurrence, toDate);
+        return formatEventItem(parsed.icon, parsed.title, parsed.recurrence, toDate, parsed.repeatDays);
       });
 
       // Also scan other dayLogs: if any event anywhere had recurrence pointing to fromDate, update it to toDate
@@ -204,7 +212,7 @@ export default function App() {
           dLog.importantEvents = dLog.importantEvents.map((raw) => {
             const parsed = parseEventItem(raw);
             if (parsed.originalDate === fromDate) {
-              return formatEventItem(parsed.icon, parsed.title, parsed.recurrence, toDate);
+              return formatEventItem(parsed.icon, parsed.title, parsed.recurrence, toDate, parsed.repeatDays);
             }
             return raw;
           });
@@ -423,6 +431,15 @@ export default function App() {
     });
   };
 
+  // Habits Handlers
+  const handleUpdateHabits = (newHabits: Habit[]) => {
+    setDb((prev) => ({
+      ...prev,
+      habits: newHabits,
+      lastUpdated: Date.now(),
+    }));
+  };
+
   // Settings Handlers
   const handleUpdateSettings = (partial: Partial<AppSettings>) => {
     setDb((prev) => ({
@@ -556,6 +573,7 @@ export default function App() {
                 onUpdateCycleLog={handleUpdateCycleLog}
                 allCycleLogs={db.cycleLogs}
                 habits={db.habits}
+                onUpdateHabits={handleUpdateHabits}
                 settings={db.settings}
                 onOpenJokesDigest={() => setCurrentView('jokes-digest')}
                 onTransferDay={handleTransferDay}
@@ -624,6 +642,7 @@ export default function App() {
             database={db}
             onRestoreDatabase={(newDb) => {
               setDb(newDb);
+              saveJournalDatabase(newDb);
             }}
           />
 
@@ -634,6 +653,7 @@ export default function App() {
             database={db}
             onRestoreDatabase={(newDb) => {
               setDb(newDb);
+              saveJournalDatabase(newDb);
             }}
             onOpenRecovery={() => setIsRecoveryOpen(true)}
           />
@@ -645,6 +665,7 @@ export default function App() {
             currentDatabase={db}
             onRestoreDatabase={(newDb) => {
               setDb(newDb);
+              saveJournalDatabase(newDb);
             }}
           />
 

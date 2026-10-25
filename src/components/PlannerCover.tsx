@@ -176,7 +176,11 @@ export const PlannerCover: React.FC<PlannerCoverProps> = ({
           <div className="relative bg-white/95 rounded-[28px] p-5 sm:p-6 shadow-md border-2 border-pink-200/90 text-center flex flex-col items-center justify-center my-1 ml-3">
             
             {/* Luxury Padlock Medallion */}
-            <div className="relative mb-2">
+            <div
+              className={`relative mb-2 ${!isLocked ? 'cursor-pointer hover:scale-105 active:scale-95 transition-transform' : ''}`}
+              onClick={!isLocked ? triggerBookOpen : undefined}
+              title={!isLocked ? 'Click to open diary 📖' : undefined}
+            >
               <div
                 className={`w-13 h-13 rounded-full flex items-center justify-center shadow-md transition-all duration-300 ${
                   isSuccess
@@ -201,19 +205,8 @@ export const PlannerCover: React.FC<PlannerCoverProps> = ({
 
             <div className="w-16 h-0.5 bg-gradient-to-r from-transparent via-pink-400 to-transparent my-1" />
 
-            {/* COMBINATION DIARY LOCK OR QUICK OPEN */}
+            {/* COMBINATION DIARY LOCK */}
             <div className="w-full max-w-[240px] flex flex-col items-center mt-2">
-              {/* Quick Open Button if not strictly PIN locked */}
-              {!isLocked && (
-                <button
-                  type="button"
-                  onClick={triggerBookOpen}
-                  className="mb-3 px-4 py-2 rounded-xl bg-pink-500 hover:bg-pink-600 active:scale-95 text-white font-serif font-bold text-xs shadow-xs transition cursor-pointer flex items-center gap-1.5"
-                >
-                  <span>Open Planner 📖</span>
-                </button>
-              )}
-
               {/* 4 Lock Tumblers (Digit Display) */}
               <div className="flex justify-center gap-3 mb-4">
                 {[0, 1, 2, 3].map((idx) => {

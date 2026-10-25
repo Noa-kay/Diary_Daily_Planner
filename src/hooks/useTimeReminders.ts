@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Task, DayLog } from '../types';
+import { Task, DayLog, Habit } from '../types';
 import { formatDateKey, getEventStringsForDate, parseEventItem } from '../services/storage';
 import { playGentleChime, extractTimeInMinutes } from '../services/soundService';
 
@@ -18,7 +18,8 @@ export interface ApproachingReminder {
 export function useTimeReminders(
   tasks: Task[],
   dayLogs: Record<string, DayLog>,
-  soundEnabled: boolean = true
+  soundEnabled: boolean = true,
+  habits?: Habit[]
 ) {
   const [activeAlert, setActiveAlert] = useState<ApproachingReminder | null>(null);
   const alertedStagesRef = useRef<Set<string>>(new Set());
@@ -131,6 +132,28 @@ export function useTimeReminders(
         }
       }
 
+      // 4. Check today's uncompleted habits with reminder times (e.g. Duolingo)
+      if (habits && habits.length > 0) {
+        const todayHabitsProgress = dayLogs[todayKey]?.habitsProgress || {};
+        for (const h of habits) {
+          const isDone = Boolean(todayHabitsProgress[h.id]);
+          if (isDone) continue; // Already done today, don't disturb!
+
+          const reminderStr = h.reminderTime || (h.id === 'duolingo' ? '19:00' : undefined);
+          if (!reminderStr) continue;
+
+          const mins = extractTimeInMinutes(reminderStr);
+          if (mins !== null) {
+            candidateReminders.push({
+              baseId: `habit-${todayKey}-${h.id}`,
+              title: `${h.icon} ${h.name}: Daily Practice Reminder ♡`,
+              targetMinutes: mins,
+              timeLabel: reminderStr,
+            });
+          }
+        }
+      }
+
       // Check each candidate for the 3 stages: 10 minutes before, 5 minutes before, on time (0m)
       for (const item of candidateReminders) {
         // If user muted future reminders for this item, skip completely!
@@ -173,6 +196,19 @@ export function useTimeReminders(
               stage: detectedStage,
               stageLabel,
             });
+
+            // Trigger desktop notification if supported and granted
+            if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+              try {
+                new Notification(item.title, {
+                  body: `${stageLabel} (${item.timeLabel}) • Practice now to keep your daily streak alive! ♡`,
+                  icon: '/icon.svg',
+                });
+              } catch (e) {
+                console.warn('Desktop notification error:', e);
+              }
+            }
+
             break; // trigger one alert per check interval
           }
         }
@@ -183,7 +219,7 @@ export function useTimeReminders(
     checkUpcomingReminders();
     const interval = setInterval(checkUpcomingReminders, 10000);
     return () => clearInterval(interval);
-  }, [tasks, dayLogs, soundEnabled]);
+  }, [tasks, dayLogs, soundEnabled, habits]);
 
   // Auto dismiss after 12 seconds if not interacted
   useEffect(() => {

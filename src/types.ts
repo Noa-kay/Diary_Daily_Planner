@@ -46,7 +46,7 @@ export type IdeaCategory =
   | 'השראה' 
   | 'יצירה';
 
-export type MoodType = 'great' | 'calm' | 'tired' | 'stressed' | 'sad' | 'creative';
+export type MoodType = 'great' | 'calm' | 'tired' | 'stressed' | 'sad' | 'creative' | 'angry';
 
 export type IdeaStatus = 'spark' | 'in_progress' | 'cherished' | 'completed';
 
@@ -103,6 +103,7 @@ export type CycleSymptom =
 export interface CycleDayLog {
   date: string; // YYYY-MM-DD
   isPeriod: boolean;
+  didNotOccur?: boolean; // User marked that expected/scheduled period did not happen (false alarm, delayed, or cancelled)
   flow?: FlowLevel;
   symptoms: CycleSymptom[];
   notes?: string;
@@ -116,6 +117,7 @@ export interface Habit {
   icon: string;
   targetPerDay: number;
   unit: string;
+  reminderTime?: string; // e.g. "19:00" for daily reminder chime
 }
 
 export interface DayHabitProgress {
@@ -123,7 +125,13 @@ export interface DayHabitProgress {
   value: number; // e.g. glasses of water, 1 for boolean
 }
 
-export type EventRecurrence = 'none' | 'yearly-gregorian' | 'yearly-hebrew';
+export type EventRecurrence = 
+  | 'none' 
+  | 'daily' 
+  | 'weekly' 
+  | 'weekly-custom' 
+  | 'yearly-gregorian' 
+  | 'yearly-hebrew';
 
 export interface DailyWitItem {
   id: string;
@@ -176,6 +184,7 @@ export interface AppSettings {
   cycleDiscreteMode: boolean; // Replaces period icons/terms with discrete flower
   averageCycleLength: number; // default 28 days
   averagePeriodLength: number; // default 5 days
+  calendarSystem?: 'gregorian' | 'hebrew'; // Toggle between Gregorian and Hebrew monthly calendar views
   pinCode?: string; // 4 digits, optional
   isPinLocked: boolean;
   autoLockMinutes?: number; // Auto-lock inactivity timeout in minutes (default 20, 0 = disabled)

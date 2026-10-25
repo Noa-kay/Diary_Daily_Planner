@@ -180,13 +180,13 @@ export const JokesDigest: React.FC<JokesDigestProps> = ({
       {/* HEADER */}
       <div className="text-center pb-5 mb-5 border-b border-pink-200/80">
         <p className="text-xs text-pink-500 font-script tracking-widest uppercase mb-0.5">
-          ✦ THE LAUGHTER & WISDOM DIGEST ✦
+          ✦ THE GEMS & WISDOM TREASURY ✦
         </p>
         <h1 className="text-3xl sm:text-4xl font-serif font-bold text-pink-950 tracking-tight my-1">
-          JOKES & IDIOMS <span className="font-script text-pink-500 italic font-normal text-4xl sm:text-5xl">Treasury 🃏</span>
+          DAILY GEMS <span className="font-script text-pink-500 italic font-normal text-4xl sm:text-5xl">& Wisdom 💎</span>
         </h1>
         <p className="text-xs text-pink-700/80 max-w-lg mx-auto mb-4 leading-relaxed">
-          Summary book of all the jokes, funny moments, catchy idioms, and witty quotes you recorded throughout the Hebrew months and years!
+          Treasury of all the gems, funny jokes, catchy idioms, and witty quotes you recorded throughout the Hebrew months and years!
         </p>
 
         {/* Big Switch: Monthly Summary vs Yearly Summary */}
@@ -201,7 +201,7 @@ export const JokesDigest: React.FC<JokesDigestProps> = ({
             }`}
           >
             <CalendarIcon className="w-3.5 h-3.5 text-pink-500" />
-            <span>Monthly Digest</span>
+            <span>Monthly Gems</span>
           </button>
 
           <button

@@ -154,9 +154,9 @@ export const BookContainer: React.FC<BookContainerProps> = ({
             },
             {
               id: 'jokes-digest' as BookView,
-              title: 'Jokes & Quotes Treasury 🃏',
-              shortTitle: 'Jokes 🃏',
-              icon: <Smile className="w-3.5 h-3.5 text-amber-500" />,
+              title: 'Daily Gems & Wisdom 💎',
+              shortTitle: 'Gems 💎',
+              icon: <Sparkles className="w-3.5 h-3.5 text-amber-500" />,
             },
             ...(settings.enableCycleTracker
               ? [

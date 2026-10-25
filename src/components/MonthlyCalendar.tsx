@@ -236,18 +236,20 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
             const hasIdeas = ideas.some((i) => i.date === cell.key);
             const dayEvents = getEventStringsForDate(cell.key, dayLogs);
             const cycleLog = cycleLogs[cell.key];
-            const isPeriod = cycleLog?.isPeriod;
+            const isPeriod = Boolean(cycleLog?.isPeriod && !cycleLog?.didNotOccur);
+            const isDidNotOccur = Boolean(cycleLog?.didNotOccur);
 
             // Prediction highlight
             const isPredictedPeriod =
               settings.enableCycleTracker &&
+              !isDidNotOccur &&
               prediction.nextPeriodStart &&
               prediction.nextPeriodEnd &&
               cell.key >= prediction.nextPeriodStart &&
               cell.key <= prediction.nextPeriodEnd;
 
             const isPredictedOvulation =
-              settings.enableCycleTracker && cell.key === prediction.ovulationDay;
+              settings.enableCycleTracker && !isDidNotOccur && cell.key === prediction.ovulationDay;
 
             return (
               <button
@@ -308,6 +310,25 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
                     <div className="space-y-0.5 my-0.5">
                       {dayEvents.slice(0, 2).map((evt, idx) => {
                         const parsed = parseEventItem(evt);
+                        const isRoutine =
+                          parsed.recurrence === 'weekly-custom' ||
+                          parsed.recurrence === 'weekly' ||
+                          parsed.recurrence === 'daily';
+
+                        if (isRoutine) {
+                          return (
+                            <div
+                              key={idx}
+                              title={`${parsed.title} (מטלה / שגרה קבועה)`}
+                              className="flex items-center gap-1 text-[8.5px] sm:text-[9px] px-1 py-0.5 rounded-md font-normal bg-stone-50/90 text-stone-700 border border-dashed border-stone-300 leading-tight overflow-hidden"
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full border border-pink-400 bg-pink-100 shrink-0" />
+                              <span className="shrink-0 text-[9.5px] leading-none select-none">{parsed.icon}</span>
+                              <span className="break-words line-clamp-1 flex-1 font-medium">{parsed.title}</span>
+                            </div>
+                          );
+                        }
+
                         return (
                           <div
                             key={idx}

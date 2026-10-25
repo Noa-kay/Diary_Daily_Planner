@@ -99,7 +99,17 @@ export const CycleTracker: React.FC<CycleTrackerProps> = ({
     onUpdateCycleLog(selectedDate, {
       date: selectedDate,
       isPeriod: !currentLog.isPeriod,
+      didNotOccur: false,
       flow: !currentLog.isPeriod ? (currentLog.flow || 'medium') : undefined,
+    });
+  };
+
+  const handleMarkDidNotOccur = () => {
+    onUpdateCycleLog(selectedDate, {
+      date: selectedDate,
+      isPeriod: false,
+      didNotOccur: !currentLog.didNotOccur,
+      flow: undefined,
     });
   };
 
@@ -107,6 +117,7 @@ export const CycleTracker: React.FC<CycleTrackerProps> = ({
     onUpdateCycleLog(selectedDate, {
       date: selectedDate,
       isPeriod: true,
+      didNotOccur: false,
       flow,
     });
   };
@@ -351,9 +362,11 @@ export const CycleTracker: React.FC<CycleTrackerProps> = ({
                 return <div key={idx} className="h-7" />;
               }
 
-              const isLogged = cycleLogs[cell.dateStr]?.isPeriod;
+              const isLogged = cycleLogs[cell.dateStr]?.isPeriod && !cycleLogs[cell.dateStr]?.didNotOccur;
+              const isDidNotOccur = cycleLogs[cell.dateStr]?.didNotOccur;
               const isSelected = cell.dateStr === selectedDate;
               const isPredicted =
+                !isDidNotOccur &&
                 prediction.nextPeriodStart &&
                 prediction.nextPeriodEnd &&
                 cell.dateStr >= prediction.nextPeriodStart &&
@@ -368,14 +381,20 @@ export const CycleTracker: React.FC<CycleTrackerProps> = ({
                       ? 'ring-2 ring-pink-400 bg-pink-100 font-bold text-pink-950'
                       : isLogged
                       ? 'bg-rose-400 text-white font-bold shadow-2xs'
+                      : isDidNotOccur
+                      ? 'bg-amber-100/90 text-amber-900 border border-amber-300 line-through'
                       : isPredicted
                       ? 'bg-pink-100/70 text-pink-800'
                       : 'hover:bg-pink-50 text-stone-700'
                   }`}
+                  title={isDidNotOccur ? 'סומן: המחזור לא קרה בסוף' : undefined}
                 >
                   <span>{cell.dayNum}</span>
                   {isLogged && (
                     <span className="absolute bottom-0.5 w-1 h-1 rounded-full bg-white" />
+                  )}
+                  {isDidNotOccur && (
+                    <span className="absolute bottom-0.5 w-1 h-1 rounded-full bg-amber-600" />
                   )}
                 </button>
               );
@@ -391,6 +410,10 @@ export const CycleTracker: React.FC<CycleTrackerProps> = ({
             <span className="flex items-center gap-1">
               <span className="w-2.5 h-2.5 rounded-full bg-pink-200" />
               <span>Expected Window</span>
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-300 border border-amber-500" />
+              <span>Did not occur</span>
             </span>
             <span className="flex items-center gap-1">
               <span className="text-xs">🌸</span>
@@ -409,17 +432,49 @@ export const CycleTracker: React.FC<CycleTrackerProps> = ({
                 <span>💧</span>
                 <span>Flow Tracker</span>
               </h3>
-              <button
-                onClick={handleTogglePeriod}
-                className={`text-[11px] px-2.5 py-0.5 rounded-full border transition cursor-pointer font-medium ${
-                  currentLog.isPeriod
-                    ? 'bg-rose-500 text-white border-rose-600 shadow-2xs'
-                    : 'bg-pink-50 text-pink-900 border-pink-200 hover:bg-pink-100'
-                }`}
-              >
-                {currentLog.isPeriod ? '🌸 Active Today' : '+ Mark Day 🌸'}
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleTogglePeriod}
+                  className={`text-[10px] sm:text-[11px] px-2.5 py-0.5 rounded-full border transition cursor-pointer font-medium ${
+                    currentLog.isPeriod
+                      ? 'bg-rose-500 text-white border-rose-600 shadow-2xs'
+                      : 'bg-pink-50 text-pink-900 border-pink-200 hover:bg-pink-100'
+                  }`}
+                >
+                  {currentLog.isPeriod ? '🌸 Active Today' : '+ Mark Day 🌸'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleMarkDidNotOccur}
+                  title="Mark that the expected period did not happen (false alarm / delayed)"
+                  className={`text-[10px] sm:text-[11px] px-2.5 py-0.5 rounded-full border transition cursor-pointer font-medium flex items-center gap-1 ${
+                    currentLog.didNotOccur
+                      ? 'bg-amber-100 text-amber-900 border-amber-300 shadow-2xs font-bold'
+                      : 'bg-white hover:bg-amber-50 text-stone-600 hover:text-stone-900 border-stone-200 shadow-2xs'
+                  }`}
+                >
+                  <span>{currentLog.didNotOccur ? '🚫 Did Not Occur' : 'Did Not Occur ✕'}</span>
+                </button>
+              </div>
             </div>
+
+            {/* If marked did not occur, show subtle status note */}
+            {currentLog.didNotOccur && (
+              <div className="mb-2.5 px-3 py-1.5 rounded-xl bg-amber-50/90 border border-amber-200 text-xs text-amber-950 flex items-center justify-between shadow-2xs animate-in fade-in">
+                <span className="flex items-center gap-1.5 font-medium text-[11px]">
+                  <span>🚫</span>
+                  <span>Marked: Period did not occur on this day (False alarm).</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={handleMarkDidNotOccur}
+                  className="text-[10px] font-bold text-amber-800 hover:text-amber-950 px-2 py-0.5 rounded-md bg-white border border-amber-200 cursor-pointer shadow-2xs"
+                >
+                  Reset
+                </button>
+              </div>
+            )}
 
             <div className="grid grid-cols-4 gap-2 mb-3">
               {FLOW_LEVELS.map((f) => {

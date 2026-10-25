@@ -64,7 +64,10 @@ export async function saveToIndexedDB(db: JournalDatabase): Promise<void> {
     const tx = idb.transaction(IDB_STORE, 'readwrite');
     const store = tx.objectStore(IDB_STORE);
     store.put(JSON.stringify(db), 'active_db');
-    store.put(JSON.stringify(db), `snapshot_${Date.now()}`);
+    if (scoreUserData(db) > 0) {
+      store.put(JSON.stringify(db), 'permanent_user_db');
+      store.put(JSON.stringify(db), `snapshot_${Date.now()}`);
+    }
     return new Promise((resolve, reject) => {
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
@@ -80,26 +83,45 @@ export async function loadFromIndexedDB(): Promise<JournalDatabase | null> {
     const tx = idb.transaction(IDB_STORE, 'readonly');
     const store = tx.objectStore(IDB_STORE);
     const req = store.get('active_db');
+    const permReq = store.get('permanent_user_db');
+
     return new Promise((resolve) => {
+      let activeDb: JournalDatabase | null = null;
+      let permDb: JournalDatabase | null = null;
+
       req.onsuccess = () => {
         if (req.result && typeof req.result === 'string') {
           try {
-            resolve(JSON.parse(req.result) as JournalDatabase);
-          } catch {
-            resolve(null);
-          }
-        } else {
-          resolve(null);
+            activeDb = JSON.parse(req.result) as JournalDatabase;
+          } catch {}
         }
       };
-      req.onerror = () => resolve(null);
+
+      permReq.onsuccess = () => {
+        if (permReq.result && typeof permReq.result === 'string') {
+          try {
+            permDb = JSON.parse(permReq.result) as JournalDatabase;
+          } catch {}
+        }
+      };
+
+      tx.oncomplete = () => {
+        const activeScore = scoreUserData(activeDb);
+        const permScore = scoreUserData(permDb);
+        if (permScore > activeScore) {
+          resolve(permDb);
+        } else {
+          resolve(activeDb);
+        }
+      };
+      tx.onerror = () => resolve(null);
     });
   } catch {
     return null;
   }
 }
 
-// Calculate how much real user-written content exists in a database
+// Calculate how much real user-written content exists in a database (0 = only dummy starter data, >0 = real user content)
 export function scoreUserData(db: JournalDatabase | null | undefined): number {
   if (!db) return 0;
   let score = 0;
@@ -114,12 +136,8 @@ export function scoreUserData(db: JournalDatabase | null | undefined): number {
 
   if (Array.isArray(db.tasks)) {
     for (const t of db.tasks) {
-      if (t && t.title) {
-        if (!sampleTaskTitles.includes(t.title)) {
-          score += 10; // Real user task!
-        } else {
-          score += 1;
-        }
+      if (t && t.title && !sampleTaskTitles.includes(t.title)) {
+        score += 10; // Real user task!
       }
     }
   }
@@ -138,8 +156,6 @@ export function scoreUserData(db: JournalDatabase | null | undefined): number {
         const isSample = sampleIdeaTitles.some((s) => idea.title.includes(s));
         if (!isSample) {
           score += 20; // Real user note/idea!
-        } else {
-          score += 1;
         }
       }
     }
@@ -154,14 +170,28 @@ export function scoreUserData(db: JournalDatabase | null | undefined): number {
         if (log.importantEvents && log.importantEvents.length > 0) score += 10 * log.importantEvents.length;
         if (log.witItems && log.witItems.length > 0) score += 10 * log.witItems.length;
         if (log.middayCheckIn) score += 10;
+        if (log.schedule && Object.keys(log.schedule).some((k) => (log.schedule as Record<string, string>)[k]?.trim())) {
+          score += 15;
+        }
       }
     }
   }
 
   if (db.cycleLogs && typeof db.cycleLogs === 'object') {
-    const cycleKeys = Object.keys(db.cycleLogs);
-    if (cycleKeys.length > 0) {
-      score += cycleKeys.length * 5;
+    for (const k of Object.keys(db.cycleLogs)) {
+      const c = db.cycleLogs[k];
+      if (c && c.notes && c.notes !== 'Gentle first day, resting with a cozy hot water bottle') {
+        score += 10;
+      }
+    }
+  }
+
+  if (db.settings) {
+    if (db.settings.pinCode && db.settings.pinCode !== '2006' && db.settings.pinCode !== '1234') {
+      score += 5;
+    }
+    if (db.settings.userDisplayName && db.settings.userDisplayName !== 'My Planner') {
+      score += 5;
     }
   }
 
@@ -350,6 +380,7 @@ export interface ParsedEventItem {
   icon: string;
   title: string;
   recurrence: EventRecurrence;
+  repeatDays?: number[]; // [0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat]
   originalDate?: string;
   raw: string;
 }
@@ -358,12 +389,16 @@ export function formatEventItem(
   icon: string,
   title: string,
   recurrence: EventRecurrence = 'none',
-  originalDate?: string
+  originalDate?: string,
+  repeatDays?: number[]
 ): string {
-  const cleanTitle = title.replace(/\s*@@repeat:[^ ]+/g, '').trim();
+  const cleanTitle = title.replace(/\s*@@repeat:[^\s]+/g, '').trim();
   if (recurrence && recurrence !== 'none') {
+    const daysSuffix = (recurrence === 'weekly-custom' && repeatDays && repeatDays.length > 0)
+      ? `:${repeatDays.sort((a, b) => a - b).join(',')}`
+      : '';
     const dateSuffix = originalDate ? `@${originalDate}` : '';
-    return `${icon} ${cleanTitle} @@repeat:${recurrence}${dateSuffix}`;
+    return `${icon} ${cleanTitle} @@repeat:${recurrence}${daysSuffix}${dateSuffix}`;
   }
   return `${icon} ${cleanTitle}`;
 }
@@ -374,14 +409,18 @@ export function parseEventItem(raw: string): ParsedEventItem {
 
   let working = raw.trim();
   let recurrence: EventRecurrence = 'none';
+  let repeatDays: number[] | undefined = undefined;
   let originalDate: string | undefined = undefined;
 
-  // Extract recurrence tag if present: e.g. @@repeat:yearly-gregorian@2026-10-15
-  const repeatRegex = /\s*@@repeat:(yearly-gregorian|yearly-hebrew)(?:@(\d{4}-\d{2}-\d{2}))?$/;
+  // Extract recurrence tag if present: e.g. @@repeat:weekly-custom:0,2,4@2026-10-12 or @@repeat:yearly-gregorian@2026-10-15
+  const repeatRegex = /\s*@@repeat:([a-zA-Z0-9-]+)(?::([0-9,]+))?(?:@(\d{4}-\d{2}-\d{2}))?$/;
   const repeatMatch = working.match(repeatRegex);
   if (repeatMatch) {
     recurrence = repeatMatch[1] as EventRecurrence;
-    originalDate = repeatMatch[2];
+    if (repeatMatch[2]) {
+      repeatDays = repeatMatch[2].split(',').map(Number).filter((n) => !isNaN(n));
+    }
+    originalDate = repeatMatch[3];
     working = working.slice(0, repeatMatch.index).trim();
   }
 
@@ -391,7 +430,7 @@ export function parseEventItem(raw: string): ParsedEventItem {
   if (leadMatch) {
     const icon = leadMatch[1];
     const title = working.slice(leadMatch[0].length).trim();
-    return { icon, title: title || working, recurrence, originalDate, raw };
+    return { icon, title: title || working, recurrence, repeatDays, originalDate, raw };
   }
 
   // 2. Trailing emoji: e.g. "Maya's Birthday 🎂" or "Dentist 14:00 🦷"
@@ -400,10 +439,10 @@ export function parseEventItem(raw: string): ParsedEventItem {
   if (trailMatch && trailMatch.index !== undefined) {
     const icon = trailMatch[1];
     const title = working.slice(0, trailMatch.index).trim();
-    return { icon, title: title || working, recurrence, originalDate, raw };
+    return { icon, title: title || working, recurrence, repeatDays, originalDate, raw };
   }
 
-  return { icon: '✦', title: working, recurrence, originalDate, raw };
+  return { icon: '✦', title: working, recurrence, repeatDays, originalDate, raw };
 }
 
 export interface DayEventItem {
@@ -420,9 +459,18 @@ export function getEventsForDate(
   if (!dayLogs) return [];
   const result: DayEventItem[] = [];
   const directEvents = dayLogs[targetDateKey]?.importantEvents || [];
+  const targetDate = parseDateKey(targetDateKey);
+  const targetDayOfWeek = targetDate.getDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
+  const targetMonthDay = targetDateKey.slice(5); // "MM-DD"
 
   for (const raw of directEvents) {
     const parsed = parseEventItem(raw);
+    // If weekly-custom was entered here but this specific day of week isn't included, skip on this day
+    if (parsed.recurrence === 'weekly-custom' && parsed.repeatDays && parsed.repeatDays.length > 0) {
+      if (!parsed.repeatDays.includes(targetDayOfWeek)) {
+        continue;
+      }
+    }
     result.push({
       evt: raw,
       parsed,
@@ -432,35 +480,70 @@ export function getEventsForDate(
   }
 
   // Check recurring events from other dates
-  const targetDate = parseDateKey(targetDateKey);
-  const targetMonthDay = targetDateKey.slice(5); // "MM-DD"
-
   for (const [sourceDateKey, log] of Object.entries(dayLogs)) {
     if (sourceDateKey === targetDateKey) continue;
     const events = log?.importantEvents || [];
     for (const raw of events) {
       const parsed = parseEventItem(raw);
-      if (parsed.recurrence === 'yearly-gregorian') {
-        const sourceMonthDay = (parsed.originalDate || sourceDateKey).slice(5);
+      const originKey = parsed.originalDate || sourceDateKey;
+
+      if (parsed.recurrence === 'daily') {
+        if (!result.some((r) => r.parsed.title === parsed.title && r.parsed.icon === parsed.icon)) {
+          result.push({
+            evt: raw,
+            parsed,
+            isRecurringInstance: true,
+            originalDate: originKey,
+          });
+        }
+      } else if (parsed.recurrence === 'weekly') {
+        const sourceDate = parseDateKey(originKey);
+        if (targetDayOfWeek === sourceDate.getDay()) {
+          if (!result.some((r) => r.parsed.title === parsed.title && r.parsed.icon === parsed.icon)) {
+            result.push({
+              evt: raw,
+              parsed,
+              isRecurringInstance: true,
+              originalDate: originKey,
+            });
+          }
+        }
+      } else if (parsed.recurrence === 'weekly-custom') {
+        const sourceDate = parseDateKey(originKey);
+        const activeDays = (parsed.repeatDays && parsed.repeatDays.length > 0)
+          ? parsed.repeatDays
+          : [sourceDate.getDay()];
+        if (activeDays.includes(targetDayOfWeek)) {
+          if (!result.some((r) => r.parsed.title === parsed.title && r.parsed.icon === parsed.icon)) {
+            result.push({
+              evt: raw,
+              parsed,
+              isRecurringInstance: true,
+              originalDate: originKey,
+            });
+          }
+        }
+      } else if (parsed.recurrence === 'yearly-gregorian') {
+        const sourceMonthDay = originKey.slice(5);
         if (sourceMonthDay === targetMonthDay) {
           if (!result.some((r) => r.parsed.title === parsed.title && r.parsed.icon === parsed.icon)) {
             result.push({
               evt: raw,
               parsed,
               isRecurringInstance: true,
-              originalDate: parsed.originalDate || sourceDateKey,
+              originalDate: originKey,
             });
           }
         }
       } else if (parsed.recurrence === 'yearly-hebrew') {
-        const sourceDate = parseDateKey(parsed.originalDate || sourceDateKey);
+        const sourceDate = parseDateKey(originKey);
         if (isSameHebrewDayAndMonth(sourceDate, targetDate)) {
           if (!result.some((r) => r.parsed.title === parsed.title && r.parsed.icon === parsed.icon)) {
             result.push({
               evt: raw,
               parsed,
               isRecurringInstance: true,
-              originalDate: parsed.originalDate || sourceDateKey,
+              originalDate: originKey,
             });
           }
         }
@@ -478,8 +561,8 @@ export function getEventStringsForDate(
   return getEventsForDate(targetDateKey, dayLogs).map((item) => item.evt);
 }
 
-const defaultHabits: Habit[] = [
-  { id: 'water', name: 'Water Intake', icon: '💧', targetPerDay: 8, unit: 'glasses' },
+export const defaultHabits: Habit[] = [
+  { id: 'duolingo', name: 'Duolingo', icon: '🦉', targetPerDay: 1, unit: 'lesson', reminderTime: '19:00' },
   { id: 'reading', name: 'Reading & Learning', icon: '📖', targetPerDay: 1, unit: 'chapter/time' },
   { id: 'walk', name: 'Gentle Walk & Movement', icon: '👟', targetPerDay: 1, unit: 'walk' },
   { id: 'mindfulness', name: 'Mindfulness & Breathing', icon: '✨', targetPerDay: 1, unit: 'session' },
@@ -707,7 +790,15 @@ export function loadJournalDatabase(): JournalDatabase {
     if (!parsed.settings.userDisplayName || parsed.settings.userDisplayName === 'יומני המלכותי' || parsed.settings.userDisplayName === 'My Daily Planner') {
       parsed.settings.userDisplayName = 'My Planner';
     }
-    if (!parsed.habits) parsed.habits = defaultHabits;
+    if (!parsed.habits) {
+      parsed.habits = defaultHabits;
+    } else {
+      parsed.habits = parsed.habits.map((h) =>
+        h.id === 'duolingo' || h.name.toLowerCase().includes('duolingo')
+          ? { ...h, name: 'Duolingo', icon: h.icon || '🦉', reminderTime: h.reminderTime || '19:00' }
+          : h
+      );
+    }
     if (!parsed.cycleLogs) parsed.cycleLogs = {};
     if (!parsed.dayLogs) parsed.dayLogs = {};
     if (!parsed.tasks) parsed.tasks = [];
@@ -900,7 +991,7 @@ export function calculateCyclePrediction(
   avgPeriodLength: number = 5
 ): CyclePrediction {
   const periodDates = Object.keys(cycleLogs)
-    .filter((k) => cycleLogs[k]?.isPeriod)
+    .filter((k) => cycleLogs[k]?.isPeriod && !cycleLogs[k]?.didNotOccur)
     .sort();
 
   if (periodDates.length === 0) {

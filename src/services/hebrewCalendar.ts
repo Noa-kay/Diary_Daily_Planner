@@ -135,3 +135,140 @@ export function isSameHebrewDayAndMonth(dateA: Date, dateB: Date): boolean {
     return false;
   }
 }
+
+export const HEBREW_DAYS_OF_WEEK_FULL = [
+  'יום ראשון',
+  'יום שני',
+  'יום שלישי',
+  'יום רביעי',
+  'יום חמישי',
+  'יום שישי',
+  'שבת קודש',
+];
+
+export const HEBREW_DAYS_OF_WEEK_SHORT = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+
+export interface HebrewCalendarCell {
+  date: Date;
+  dateKey: string; // YYYY-MM-DD (underlying Gregorian date key)
+  hebrewDay: number;
+  hebrewDayLetter: string; // e.g. "א׳", "כ״ד"
+  hebrewMonth: number;
+  hebrewMonthName: string; // e.g. "תשרי"
+  hebrewYear: number;
+  hebrewYearLetter: string; // e.g. "תשפ״ז"
+  isCurrentHebrewMonth: boolean;
+  holidayName?: string;
+  isRoshChodesh?: boolean;
+  dayOfWeek: number; // 0 = Sunday, 6 = Saturday
+}
+
+// Convert a JS Date to "YYYY-MM-DD"
+function toDateKey(d: Date): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+// Get next Hebrew month ({ year, month })
+export function getNextHebrewMonth(year: number, month: number): { year: number; month: number } {
+  try {
+    const hd = new HDate(1, month, year);
+    const nextHd = hd.add(1, 'month');
+    return {
+      year: nextHd.getFullYear(),
+      month: nextHd.getMonth(),
+    };
+  } catch (err) {
+    console.error('Error in getNextHebrewMonth:', err);
+    return { year, month: month === 12 ? 1 : month + 1 };
+  }
+}
+
+// Get previous Hebrew month ({ year, month })
+export function getPrevHebrewMonth(year: number, month: number): { year: number; month: number } {
+  try {
+    const hd = new HDate(1, month, year);
+    const prevHd = hd.subtract(1, 'month');
+    return {
+      year: prevHd.getFullYear(),
+      month: prevHd.getMonth(),
+    };
+  } catch (err) {
+    console.error('Error in getPrevHebrewMonth:', err);
+    return { year, month: month === 1 ? 12 : month - 1 };
+  }
+}
+
+// Format Hebrew month & year title, e.g. "חשוון תשפ״ז"
+export function formatHebrewMonthTitle(year: number, month: number): string {
+  const monthName = HEBREW_MONTH_NAMES[month] || '';
+  const yearLetter = getHebrewYearLetter(year);
+  return `${monthName} ${yearLetter}`;
+}
+
+// Build a complete monthly calendar grid for a given Hebrew year and Hebrew month
+export function generateHebrewMonthCalendar(
+  hebrewYear: number,
+  hebrewMonth: number
+): HebrewCalendarCell[] {
+  try {
+    const firstDay = new HDate(1, hebrewMonth, hebrewYear);
+    const numDays = firstDay.daysInMonth();
+    const startDayOfWeek = firstDay.getDay(); // 0 is Sunday
+
+    const cells: HebrewCalendarCell[] = [];
+
+    const createCellFromHDate = (hd: HDate, isCurrent: boolean): HebrewCalendarCell => {
+      const gregDate = hd.greg();
+      const events = HebrewCalendar.getHolidaysOnDate(hd);
+      let holidayName: string | undefined = undefined;
+      if (events && events.length > 0) {
+        holidayName = events[0].render('he');
+      }
+
+      return {
+        date: gregDate,
+        dateKey: toDateKey(gregDate),
+        hebrewDay: hd.getDate(),
+        hebrewDayLetter: gematriya(hd.getDate()),
+        hebrewMonth: hd.getMonth(),
+        hebrewMonthName: HEBREW_MONTH_NAMES[hd.getMonth()] || '',
+        hebrewYear: hd.getFullYear(),
+        hebrewYearLetter: gematriya(hd.getFullYear()),
+        isCurrentHebrewMonth: isCurrent,
+        holidayName,
+        isRoshChodesh: hd.getDate() === 1 || hd.getDate() === 30,
+        dayOfWeek: hd.getDay(),
+      };
+    };
+
+    // 1. Leading days from previous Hebrew month
+    for (let i = startDayOfWeek - 1; i >= 0; i--) {
+      const prevHd = firstDay.subtract(i + 1, 'd');
+      cells.push(createCellFromHDate(prevHd, false));
+    }
+
+    // 2. All days in the current Hebrew month
+    for (let day = 1; day <= numDays; day++) {
+      const curHd = new HDate(day, hebrewMonth, hebrewYear);
+      cells.push(createCellFromHDate(curHd, true));
+    }
+
+    // 3. Trailing days to finish the week row
+    const lastDay = new HDate(numDays, hebrewMonth, hebrewYear);
+    const remaining = 7 - (cells.length % 7);
+    if (remaining < 7) {
+      for (let d = 1; d <= remaining; d++) {
+        const nextHd = lastDay.add(d, 'd');
+        cells.push(createCellFromHDate(nextHd, false));
+      }
+    }
+
+    return cells;
+  } catch (err) {
+    console.error('Error generating Hebrew month calendar:', err);
+    return [];
+  }
+}
