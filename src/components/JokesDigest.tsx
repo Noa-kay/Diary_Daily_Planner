@@ -11,7 +11,9 @@ import {
   Share2,
   ChevronRight,
   Smile,
-  Quote
+  Quote,
+  Pencil,
+  X
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { DayLog, DailyWitItem } from '../types';
@@ -32,6 +34,8 @@ export interface EnrichedWitItem {
   createdAt: number;
   dateKey: string;
   gregorianDateStr: string;
+  gregorianYear: number;
+  gregorianMonth: number;
   hebrewDayLetter: string;
   hebrewMonthName: string;
   hebrewYearLetter: string;
@@ -40,21 +44,64 @@ export interface EnrichedWitItem {
   monthYearKey: string; // e.g. "5787-7"
 }
 
+export const GREGORIAN_MONTH_NAMES = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
 interface JokesDigestProps {
   allDayLogs: Record<string, DayLog>;
   onNavigateToDay: (dateStr: string) => void;
   onDeleteWitItem?: (dateKey: string, witId: string) => void;
+  onUpdateWitItem?: (dateKey: string, witId: string, updated: Partial<DailyWitItem>) => void;
 }
 
 export const JokesDigest: React.FC<JokesDigestProps> = ({
   allDayLogs,
   onNavigateToDay,
   onDeleteWitItem,
+  onUpdateWitItem,
 }) => {
-  const [activeTab, setActiveTab] = useState<'monthly' | 'yearly'>('monthly');
+  const [viewMode, setViewMode] = useState<'hebrew' | 'gregorian' | 'annual'>('hebrew');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState<string>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Edit item state
+  const [editingItem, setEditingItem] = useState<EnrichedWitItem | null>(null);
+  const [editText, setEditText] = useState('');
+  const [editPunchline, setEditPunchline] = useState('');
+  const [editType, setEditType] = useState<'joke' | 'idiom' | 'quote' | 'witticism'>('idiom');
+
+  const handleStartEdit = (item: EnrichedWitItem) => {
+    setEditingItem(item);
+    setEditText(item.text);
+    setEditPunchline(item.meaningOrPunchline || '');
+    setEditType(item.type);
+  };
+
+  const handleSaveEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingItem || !editText.trim()) return;
+    if (onUpdateWitItem) {
+      onUpdateWitItem(editingItem.dateKey, editingItem.id, {
+        text: editText.trim(),
+        meaningOrPunchline: editPunchline.trim() || undefined,
+        type: editType,
+      });
+    }
+    setEditingItem(null);
+  };
 
   // Current date for default selection
   const now = useMemo(() => new Date(), []);
@@ -62,6 +109,8 @@ export const JokesDigest: React.FC<JokesDigestProps> = ({
 
   const [selectedHebrewYear, setSelectedHebrewYear] = useState<number>(currentHebrew.hebrewYear);
   const [selectedHebrewMonth, setSelectedHebrewMonth] = useState<number>(currentHebrew.hebrewMonth);
+  const [selectedGregorianYear, setSelectedGregorianYear] = useState<number>(now.getFullYear());
+  const [selectedGregorianMonth, setSelectedGregorianMonth] = useState<number>(now.getMonth());
 
   // Extract and enrich all wit items across all days in database
   const allEnrichedItems: EnrichedWitItem[] = useMemo(() => {
@@ -87,6 +136,8 @@ export const JokesDigest: React.FC<JokesDigestProps> = ({
             day: 'numeric',
             year: 'numeric',
           }),
+          gregorianYear: dateObj.getFullYear(),
+          gregorianMonth: dateObj.getMonth(),
           hebrewDayLetter: hInfo.hebrewDayLetter,
           hebrewMonthName: hMonthYear.hebrewMonthName,
           hebrewYearLetter: hMonthYear.hebrewYearLetter,
@@ -114,16 +165,28 @@ export const JokesDigest: React.FC<JokesDigestProps> = ({
     return Array.from(yearsSet).sort((a, b) => b - a);
   }, [allEnrichedItems, currentHebrew.hebrewYear]);
 
+  // Available Gregorian years in the database (or current year)
+  const availableGregorianYears = useMemo(() => {
+    const yearsSet = new Set<number>();
+    yearsSet.add(now.getFullYear());
+    allEnrichedItems.forEach((item) => yearsSet.add(item.gregorianYear));
+    return Array.from(yearsSet).sort((a, b) => b - a);
+  }, [allEnrichedItems, now]);
+
   // Filter items based on active view, search, and type
   const displayedItems = useMemo(() => {
     return allEnrichedItems.filter((item) => {
       // 1. Time Scope Filter
-      if (activeTab === 'monthly') {
+      if (viewMode === 'hebrew') {
         if (item.hebrewYear !== selectedHebrewYear || item.hebrewMonth !== selectedHebrewMonth) {
           return false;
         }
+      } else if (viewMode === 'gregorian') {
+        if (item.gregorianYear !== selectedGregorianYear || item.gregorianMonth !== selectedGregorianMonth) {
+          return false;
+        }
       } else {
-        // yearly
+        // annual
         if (item.hebrewYear !== selectedHebrewYear) {
           return false;
         }
@@ -147,7 +210,7 @@ export const JokesDigest: React.FC<JokesDigestProps> = ({
 
       return true;
     });
-  }, [allEnrichedItems, activeTab, selectedHebrewYear, selectedHebrewMonth, selectedType, searchQuery]);
+  }, [allEnrichedItems, viewMode, selectedHebrewYear, selectedHebrewMonth, selectedGregorianYear, selectedGregorianMonth, selectedType, searchQuery]);
 
   // Statistics
   const jokesCount = useMemo(() => displayedItems.filter((i) => i.type === 'joke').length, [displayedItems]);
@@ -189,32 +252,45 @@ export const JokesDigest: React.FC<JokesDigestProps> = ({
           Treasury of all the gems, funny jokes, catchy idioms, and witty quotes you recorded throughout the Hebrew months and years!
         </p>
 
-        {/* Big Switch: Monthly Summary vs Yearly Summary */}
-        <div className="inline-flex items-center p-1 bg-pink-100/70 rounded-2xl border border-pink-200 shadow-2xs">
+        {/* View Mode Toggle: Hebrew Month vs Gregorian Month vs Annual */}
+        <div className="inline-flex flex-wrap items-center justify-center p-1 bg-pink-100/70 rounded-2xl border border-pink-200 shadow-2xs gap-1">
           <button
             type="button"
-            onClick={() => setActiveTab('monthly')}
-            className={`px-4 sm:px-6 py-2 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
-              activeTab === 'monthly'
+            onClick={() => setViewMode('hebrew')}
+            className={`px-3.5 sm:px-5 py-2 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+              viewMode === 'hebrew'
+                ? 'bg-white text-pink-950 shadow-xs border border-pink-200/80'
+                : 'text-pink-800 hover:text-pink-950'
+            }`}
+          >
+            <span>🌙</span>
+            <span>Hebrew Month (חודש עברי)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setViewMode('gregorian')}
+            className={`px-3.5 sm:px-5 py-2 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+              viewMode === 'gregorian'
                 ? 'bg-white text-pink-950 shadow-xs border border-pink-200/80'
                 : 'text-pink-800 hover:text-pink-950'
             }`}
           >
             <CalendarIcon className="w-3.5 h-3.5 text-pink-500" />
-            <span>Monthly Gems</span>
+            <span>Gregorian Month (חודש לועזי)</span>
           </button>
 
           <button
             type="button"
-            onClick={() => setActiveTab('yearly')}
-            className={`px-4 sm:px-6 py-2 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
-              activeTab === 'yearly'
+            onClick={() => setViewMode('annual')}
+            className={`px-3.5 sm:px-5 py-2 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+              viewMode === 'annual'
                 ? 'bg-white text-pink-950 shadow-xs border border-pink-200/80'
                 : 'text-pink-800 hover:text-pink-950'
             }`}
           >
             <CalendarRange className="w-3.5 h-3.5 text-amber-500" />
-            <span>Annual Treasury</span>
+            <span>Annual (שנתי)</span>
           </button>
         </div>
       </div>
@@ -222,53 +298,120 @@ export const JokesDigest: React.FC<JokesDigestProps> = ({
       {/* CONTROLS & SELECTORS BAR */}
       <div className="p-4 rounded-2xl bg-[#fff7fa] border border-pink-200/90 shadow-2xs mb-5 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          {/* Hebrew Date Pickers */}
+          {/* Date Pickers */}
           <div className="flex flex-wrap items-center gap-2">
-            {/* Year Selector */}
-            <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-pink-200 shadow-2xs text-xs">
-              <span className="text-stone-500 font-medium">Year:</span>
-              <select
-                value={selectedHebrewYear}
-                onChange={(e) => setSelectedHebrewYear(Number(e.target.value))}
-                className="font-bold text-pink-950 bg-transparent focus:outline-none cursor-pointer"
-              >
-                {availableHebrewYears.map((yr) => (
-                  <option key={yr} value={yr}>
-                    {getHebrewYearLetter(yr)} ({yr})
-                  </option>
-                ))}
-              </select>
-            </div>
+            {viewMode === 'hebrew' && (
+              <>
+                {/* Hebrew Year Selector */}
+                <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-pink-200 shadow-2xs text-xs">
+                  <span className="text-stone-500 font-medium">Year:</span>
+                  <select
+                    value={selectedHebrewYear}
+                    onChange={(e) => setSelectedHebrewYear(Number(e.target.value))}
+                    className="font-bold text-pink-950 bg-transparent focus:outline-none cursor-pointer"
+                  >
+                    {availableHebrewYears.map((yr) => (
+                      <option key={yr} value={yr}>
+                        {getHebrewYearLetter(yr)} ({yr})
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-            {/* Month Selector (Shown in monthly view) */}
-            {activeTab === 'monthly' && (
+                {/* Hebrew Month Selector */}
+                <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-pink-200 shadow-2xs text-xs">
+                  <span className="text-stone-500 font-medium">Month:</span>
+                  <select
+                    value={selectedHebrewMonth}
+                    onChange={(e) => setSelectedHebrewMonth(Number(e.target.value))}
+                    className="font-bold text-pink-950 bg-transparent focus:outline-none cursor-pointer"
+                  >
+                    {HEBREW_MONTH_ORDER.map((mNum) => (
+                      <option key={mNum} value={mNum}>
+                        {HEBREW_MONTH_NAMES[mNum]} ({mNum})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Jump to Current Hebrew Month button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedHebrewYear(currentHebrew.hebrewYear);
+                    setSelectedHebrewMonth(currentHebrew.hebrewMonth);
+                  }}
+                  className="text-xs px-2.5 py-1.5 rounded-xl bg-pink-100/60 hover:bg-pink-100 text-pink-900 border border-pink-200/80 cursor-pointer transition font-medium"
+                >
+                  Current: {currentHebrew.hebrewMonthName} {currentHebrew.hebrewYearLetter}
+                </button>
+              </>
+            )}
+
+            {viewMode === 'gregorian' && (
+              <>
+                {/* Gregorian Year Selector */}
+                <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-pink-200 shadow-2xs text-xs">
+                  <span className="text-stone-500 font-medium">Year:</span>
+                  <select
+                    value={selectedGregorianYear}
+                    onChange={(e) => setSelectedGregorianYear(Number(e.target.value))}
+                    className="font-bold text-pink-950 bg-transparent focus:outline-none cursor-pointer"
+                  >
+                    {availableGregorianYears.map((yr) => (
+                      <option key={yr} value={yr}>
+                        {yr}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Gregorian Month Selector */}
+                <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-pink-200 shadow-2xs text-xs">
+                  <span className="text-stone-500 font-medium">Month:</span>
+                  <select
+                    value={selectedGregorianMonth}
+                    onChange={(e) => setSelectedGregorianMonth(Number(e.target.value))}
+                    className="font-bold text-pink-950 bg-transparent focus:outline-none cursor-pointer"
+                  >
+                    {GREGORIAN_MONTH_NAMES.map((name, idx) => (
+                      <option key={name} value={idx}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Jump to Current Gregorian Month */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedGregorianYear(now.getFullYear());
+                    setSelectedGregorianMonth(now.getMonth());
+                  }}
+                  className="text-xs px-2.5 py-1.5 rounded-xl bg-pink-100/60 hover:bg-pink-100 text-pink-900 border border-pink-200/80 cursor-pointer transition font-medium"
+                >
+                  Current: {GREGORIAN_MONTH_NAMES[now.getMonth()]} {now.getFullYear()}
+                </button>
+              </>
+            )}
+
+            {viewMode === 'annual' && (
               <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-pink-200 shadow-2xs text-xs">
-                <span className="text-stone-500 font-medium">Month:</span>
+                <span className="text-stone-500 font-medium">Year:</span>
                 <select
-                  value={selectedHebrewMonth}
-                  onChange={(e) => setSelectedHebrewMonth(Number(e.target.value))}
+                  value={selectedHebrewYear}
+                  onChange={(e) => setSelectedHebrewYear(Number(e.target.value))}
                   className="font-bold text-pink-950 bg-transparent focus:outline-none cursor-pointer"
                 >
-                  {HEBREW_MONTH_ORDER.map((mNum) => (
-                    <option key={mNum} value={mNum}>
-                      {HEBREW_MONTH_NAMES[mNum]} ({mNum})
+                  {availableHebrewYears.map((yr) => (
+                    <option key={yr} value={yr}>
+                      {getHebrewYearLetter(yr)} ({yr})
                     </option>
                   ))}
                 </select>
               </div>
             )}
-
-            {/* Jump to Current Hebrew Month button */}
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedHebrewYear(currentHebrew.hebrewYear);
-                setSelectedHebrewMonth(currentHebrew.hebrewMonth);
-              }}
-              className="text-xs px-2.5 py-1.5 rounded-xl bg-pink-100/60 hover:bg-pink-100 text-pink-900 border border-pink-200/80 cursor-pointer transition font-medium"
-            >
-              Current: {currentHebrew.hebrewMonthName} {currentHebrew.hebrewYearLetter}
-            </button>
           </div>
 
           {/* Quick Counter Badges */}
@@ -333,13 +476,15 @@ export const JokesDigest: React.FC<JokesDigestProps> = ({
       <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-50/80 via-[#fffbfd] to-pink-50/80 border border-amber-200/80 shadow-2xs mb-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center text-xl shrink-0 border border-amber-200 shadow-2xs">
-            {activeTab === 'monthly' ? '🌙' : '⭐'}
+            {viewMode === 'hebrew' ? '🌙' : viewMode === 'gregorian' ? '🗓️' : '⭐'}
           </div>
           <div>
             <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
               <span>
-                {activeTab === 'monthly'
+                {viewMode === 'hebrew'
                   ? `Summary for ${HEBREW_MONTH_NAMES[selectedHebrewMonth] || ''} ${getHebrewYearLetter(selectedHebrewYear)}`
+                  : viewMode === 'gregorian'
+                  ? `Summary for ${GREGORIAN_MONTH_NAMES[selectedGregorianMonth]} ${selectedGregorianYear}`
                   : `Annual Treasury for ${getHebrewYearLetter(selectedHebrewYear)}`}
               </span>
               <span className="text-[10px] font-sans font-normal text-pink-600 bg-pink-50 px-2 py-0.5 rounded-full border border-pink-200">
@@ -347,8 +492,10 @@ export const JokesDigest: React.FC<JokesDigestProps> = ({
               </span>
             </h3>
             <p className="text-xs text-stone-500 mt-0.5">
-              {activeTab === 'monthly'
-                ? `All jokes and idioms entered during this Hebrew month.`
+              {viewMode === 'hebrew'
+                ? `All gems, jokes, and idioms entered during the Hebrew month of ${HEBREW_MONTH_NAMES[selectedHebrewMonth] || ''}.`
+                : viewMode === 'gregorian'
+                ? `All gems, jokes, and idioms entered during the Gregorian month of ${GREGORIAN_MONTH_NAMES[selectedGregorianMonth]} ${selectedGregorianYear}.`
                 : `Comprehensive annual archive of all laughs and wisdom recorded in ${getHebrewYearLetter(selectedHebrewYear)}.`}
             </p>
           </div>
@@ -416,13 +563,13 @@ export const JokesDigest: React.FC<JokesDigestProps> = ({
                   </div>
 
                   {/* Joke setup / Idiom */}
-                  <div className="text-sm font-semibold text-stone-900 leading-snug my-1">
-                    "{item.text}"
+                  <div dir="auto" className="text-sm font-semibold text-stone-900 leading-snug my-1 text-start">
+                    {item.text}
                   </div>
 
                   {/* Punchline / Meaning */}
                   {item.meaningOrPunchline && (
-                    <div className="mt-2 p-2.5 rounded-xl bg-[#fff8fa] border border-pink-100 text-xs text-pink-950 leading-relaxed font-script">
+                    <div dir="auto" className="mt-2 p-2.5 rounded-xl bg-[#fff8fa] border border-pink-100 text-xs text-pink-950 leading-relaxed font-script text-start">
                       <span className="font-bold text-pink-500 mr-1">
                         {isJoke ? '↳ Punchline: ' : isIdiom ? '↳ Meaning: ' : '↳ '}
                       </span>
@@ -431,7 +578,7 @@ export const JokesDigest: React.FC<JokesDigestProps> = ({
                   )}
                 </div>
 
-                {/* Bottom Actions: View on Day Page, Copy, Delete */}
+                {/* Bottom Actions: View on Day Page, Copy, Edit, Delete */}
                 <div className="flex items-center justify-between gap-2 mt-3 pt-2.5 border-t border-stone-100 text-xs">
                   <button
                     type="button"
@@ -444,11 +591,23 @@ export const JokesDigest: React.FC<JokesDigestProps> = ({
                   </button>
 
                   <div className="flex items-center gap-1">
+                    {onUpdateWitItem && (
+                      <button
+                        type="button"
+                        onClick={() => handleStartEdit(item)}
+                        className="p-1 px-2 rounded-lg hover:bg-amber-50 text-stone-600 hover:text-amber-800 transition cursor-pointer flex items-center gap-1 text-[11px] border border-stone-200 hover:border-amber-200"
+                        title="Edit this entry"
+                      >
+                        <Pencil className="w-3 h-3 text-amber-600" />
+                        <span>Edit</span>
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       onClick={() => handleCopy(item)}
                       className="p-1 px-2 rounded-lg hover:bg-stone-100 text-stone-600 transition cursor-pointer flex items-center gap-1 text-[11px]"
-                      title="Copy joke text"
+                      title="Copy text"
                     >
                       {copiedId === item.id ? (
                         <>
@@ -486,12 +645,14 @@ export const JokesDigest: React.FC<JokesDigestProps> = ({
             🃏
           </div>
           <h4 className="text-base font-bold text-pink-950">
-            {activeTab === 'monthly'
-              ? `No jokes or idioms found for חודש ${HEBREW_MONTH_NAMES[selectedHebrewMonth] || ''} ${getHebrewYearLetter(selectedHebrewYear)}`
-              : `No jokes or idioms recorded for שנת ${getHebrewYearLetter(selectedHebrewYear)}`}
+            {viewMode === 'hebrew'
+              ? `No gems or wisdom found for חודש ${HEBREW_MONTH_NAMES[selectedHebrewMonth] || ''} ${getHebrewYearLetter(selectedHebrewYear)}`
+              : viewMode === 'gregorian'
+              ? `No gems or wisdom found for ${GREGORIAN_MONTH_NAMES[selectedGregorianMonth]} ${selectedGregorianYear}`
+              : `No gems or wisdom recorded for שנת ${getHebrewYearLetter(selectedHebrewYear)}`}
           </h4>
           <p className="text-xs text-stone-500 leading-relaxed">
-            Whenever you record a joke or idiom on any daily page, it will automatically appear here in this Hebrew monthly summary and in the annual archive!
+            Whenever you record a joke, quote, or idiom on any daily page, it will automatically appear here in your selected monthly and annual digest!
           </p>
           <div className="pt-2">
             <button
@@ -502,6 +663,92 @@ export const JokesDigest: React.FC<JokesDigestProps> = ({
               <span>Go to Today's Page</span>
               <span>→</span>
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Entry Modal in JokesDigest */}
+      {editingItem && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl p-5 max-w-md w-full shadow-2xl border border-pink-200 space-y-4">
+            <div className="flex items-center justify-between border-b border-pink-100 pb-2">
+              <h3 className="text-sm font-bold text-pink-950 flex items-center gap-1.5">
+                <Pencil className="w-4 h-4 text-pink-500" />
+                <span>Edit Entry ({editingItem.hebrewDayLetter} {editingItem.hebrewMonthName})</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setEditingItem(null)}
+                className="p-1 rounded-lg text-stone-400 hover:text-stone-700"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="space-y-3">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {(['joke', 'idiom', 'quote', 'witticism'] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setEditType(t)}
+                    className={`text-xs px-2.5 py-1 rounded-full border transition cursor-pointer capitalize ${
+                      editType === t
+                        ? 'bg-pink-500 text-white font-bold border-pink-600'
+                        : 'bg-stone-50 border-stone-200 text-stone-700'
+                    }`}
+                  >
+                    {t === 'joke' ? '😂 Joke' : t === 'idiom' ? '💡 Idiom' : t === 'quote' ? '📜 Quote' : '✨ Witticism'}
+                  </button>
+                ))}
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-stone-700 mb-1">
+                  Text / Phrasing (טקסט / תוכן):
+                </label>
+                <textarea
+                  rows={3}
+                  dir="auto"
+                  value={editText}
+                  onChange={(e) => setEditText(e.target.value)}
+                  className="w-full p-2.5 text-xs bg-pink-50/20 rounded-xl border border-pink-200 focus:bg-white focus:outline-none focus:ring-1 focus:ring-pink-400 text-stone-900 text-start"
+                  placeholder="The phrase, joke, or idiom..."
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-stone-700 mb-1">
+                  Meaning / Punchline (פירוש / הסבר / שורת מחץ):
+                </label>
+                <input
+                  type="text"
+                  dir="auto"
+                  value={editPunchline}
+                  onChange={(e) => setEditPunchline(e.target.value)}
+                  className="w-full p-2 text-xs bg-pink-50/20 rounded-xl border border-pink-200 focus:bg-white focus:outline-none focus:ring-1 focus:ring-pink-400 text-stone-900 text-start"
+                  placeholder="Meaning or punchline (optional)..."
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-pink-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingItem(null)}
+                  className="px-3 py-1.5 text-xs text-stone-600 hover:bg-stone-100 rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!editText.trim()}
+                  className="px-4 py-1.5 text-xs font-semibold bg-pink-500 hover:bg-pink-600 disabled:opacity-50 text-white rounded-xl shadow-2xs transition cursor-pointer"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

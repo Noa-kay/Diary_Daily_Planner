@@ -381,6 +381,8 @@ export interface ParsedEventItem {
   title: string;
   recurrence: EventRecurrence;
   repeatDays?: number[]; // [0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat]
+  startDate?: string;
+  endDate?: string;
   originalDate?: string;
   raw: string;
 }
@@ -390,15 +392,19 @@ export function formatEventItem(
   title: string,
   recurrence: EventRecurrence = 'none',
   originalDate?: string,
-  repeatDays?: number[]
+  repeatDays?: number[],
+  endDate?: string
 ): string {
   const cleanTitle = title.replace(/\s*@@repeat:[^\s]+/g, '').trim();
   if (recurrence && recurrence !== 'none') {
-    const daysSuffix = (recurrence === 'weekly-custom' && repeatDays && repeatDays.length > 0)
-      ? `:${repeatDays.sort((a, b) => a - b).join(',')}`
-      : '';
+    let specSuffix = '';
+    if (recurrence === 'weekly-custom' && repeatDays && repeatDays.length > 0) {
+      specSuffix = `:${repeatDays.sort((a, b) => a - b).join(',')}`;
+    } else if (recurrence === 'date-range' && endDate) {
+      specSuffix = `:${endDate}`;
+    }
     const dateSuffix = originalDate ? `@${originalDate}` : '';
-    return `${icon} ${cleanTitle} @@repeat:${recurrence}${daysSuffix}${dateSuffix}`;
+    return `${icon} ${cleanTitle} @@repeat:${recurrence}${specSuffix}${dateSuffix}`;
   }
   return `${icon} ${cleanTitle}`;
 }
@@ -411,13 +417,18 @@ export function parseEventItem(raw: string): ParsedEventItem {
   let recurrence: EventRecurrence = 'none';
   let repeatDays: number[] | undefined = undefined;
   let originalDate: string | undefined = undefined;
+  let startDate: string | undefined = undefined;
+  let endDate: string | undefined = undefined;
 
-  // Extract recurrence tag if present: e.g. @@repeat:weekly-custom:0,2,4@2026-10-12 or @@repeat:yearly-gregorian@2026-10-15
-  const repeatRegex = /\s*@@repeat:([a-zA-Z0-9-]+)(?::([0-9,]+))?(?:@(\d{4}-\d{2}-\d{2}))?$/;
+  // Extract recurrence tag if present: e.g. @@repeat:weekly-custom:0,2,4@2026-10-12 or @@repeat:date-range:2026-11-02@2026-10-29
+  const repeatRegex = /\s*@@repeat:([a-zA-Z0-9-]+)(?::([0-9,-]+))?(?:@(\d{4}-\d{2}-\d{2}))?$/;
   const repeatMatch = working.match(repeatRegex);
   if (repeatMatch) {
     recurrence = repeatMatch[1] as EventRecurrence;
-    if (repeatMatch[2]) {
+    if (recurrence === 'date-range') {
+      endDate = repeatMatch[2];
+      startDate = repeatMatch[3];
+    } else if (repeatMatch[2]) {
       repeatDays = repeatMatch[2].split(',').map(Number).filter((n) => !isNaN(n));
     }
     originalDate = repeatMatch[3];
@@ -430,7 +441,7 @@ export function parseEventItem(raw: string): ParsedEventItem {
   if (leadMatch) {
     const icon = leadMatch[1];
     const title = working.slice(leadMatch[0].length).trim();
-    return { icon, title: title || working, recurrence, repeatDays, originalDate, raw };
+    return { icon, title: title || working, recurrence, repeatDays, startDate, endDate, originalDate, raw };
   }
 
   // 2. Trailing emoji: e.g. "Maya's Birthday 🎂" or "Dentist 14:00 🦷"
@@ -439,10 +450,10 @@ export function parseEventItem(raw: string): ParsedEventItem {
   if (trailMatch && trailMatch.index !== undefined) {
     const icon = trailMatch[1];
     const title = working.slice(0, trailMatch.index).trim();
-    return { icon, title: title || working, recurrence, repeatDays, originalDate, raw };
+    return { icon, title: title || working, recurrence, repeatDays, startDate, endDate, originalDate, raw };
   }
 
-  return { icon: '✦', title: working, recurrence, repeatDays, originalDate, raw };
+  return { icon: '✦', title: working, recurrence, repeatDays, startDate, endDate, originalDate, raw };
 }
 
 export interface DayEventItem {
@@ -471,6 +482,14 @@ export function getEventsForDate(
         continue;
       }
     }
+    // If date-range was entered directly, verify targetDateKey is within [startDate, endDate]
+    if (parsed.recurrence === 'date-range') {
+      const sDate = parsed.startDate || parsed.originalDate || targetDateKey;
+      const eDate = parsed.endDate || sDate;
+      if (targetDateKey < sDate || targetDateKey > eDate) {
+        continue;
+      }
+    }
     result.push({
       evt: raw,
       parsed,
@@ -487,7 +506,20 @@ export function getEventsForDate(
       const parsed = parseEventItem(raw);
       const originKey = parsed.originalDate || sourceDateKey;
 
-      if (parsed.recurrence === 'daily') {
+      if (parsed.recurrence === 'date-range') {
+        const sDate = parsed.startDate || parsed.originalDate || sourceDateKey;
+        const eDate = parsed.endDate || sDate;
+        if (targetDateKey >= sDate && targetDateKey <= eDate) {
+          if (!result.some((r) => r.parsed.title === parsed.title && r.parsed.icon === parsed.icon)) {
+            result.push({
+              evt: raw,
+              parsed,
+              isRecurringInstance: true,
+              originalDate: originKey,
+            });
+          }
+        }
+      } else if (parsed.recurrence === 'daily') {
         if (!result.some((r) => r.parsed.title === parsed.title && r.parsed.icon === parsed.icon)) {
           result.push({
             evt: raw,

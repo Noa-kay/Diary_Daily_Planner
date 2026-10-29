@@ -617,6 +617,14 @@ export default function App() {
                   const filtered = dayLog.witItems.filter((w) => w.id !== witId);
                   handleUpdateDayLog(dateKey, { witItems: filtered });
                 }}
+                onUpdateWitItem={(dateKey, witId, updated) => {
+                  const dayLog = db.dayLogs[dateKey];
+                  if (!dayLog || !dayLog.witItems) return;
+                  const newItems = dayLog.witItems.map((w) =>
+                    w.id === witId ? { ...w, ...updated } : w
+                  );
+                  handleUpdateDayLog(dateKey, { witItems: newItems });
+                }}
               />
             )}
           </BookContainer>

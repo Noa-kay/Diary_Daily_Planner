@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Heart, 
   Calendar as CalendarIcon, 
@@ -14,7 +14,11 @@ import {
   Coffee,
   Smile,
   AlertCircle,
-  FileText
+  FileText,
+  Zap,
+  Battery,
+  BatteryCharging,
+  Droplets
 } from 'lucide-react';
 import { CycleDayLog, FlowLevel, CycleSymptom, AppSettings } from '../types';
 import { formatDateKey, parseDateKey, calculateCyclePrediction } from '../services/storage';
@@ -87,6 +91,37 @@ export const CycleTracker: React.FC<CycleTrackerProps> = ({
     symptoms: [],
     painLevel: 0,
     notes: '',
+    moods: [],
+    selfCare: [],
+  };
+
+  const selectedMoods = currentLog.moods || [];
+  const handleToggleMood = (moodId: string) => {
+    const isSelected = selectedMoods.includes(moodId);
+    const updated = isSelected
+      ? selectedMoods.filter((id) => id !== moodId)
+      : [...selectedMoods, moodId];
+    onUpdateCycleLog(selectedDate, {
+      date: selectedDate,
+      moods: updated,
+    });
+  };
+
+  const energyLevel = currentLog.energyLevel;
+  const handleSetEnergy = (lvl: 'vibrant' | 'balanced' | 'low' | 'recharging') => {
+    onUpdateCycleLog(selectedDate, {
+      date: selectedDate,
+      energyLevel: energyLevel === lvl ? undefined : lvl,
+    });
+  };
+
+  const hydrationCups = currentLog.hydrationCups ?? 0;
+  const handleSetHydrationCups = (delta: number) => {
+    const next = Math.max(0, Math.min(12, hydrationCups + delta));
+    onUpdateCycleLog(selectedDate, {
+      date: selectedDate,
+      hydrationCups: next,
+    });
   };
 
   const prediction = calculateCyclePrediction(
@@ -94,6 +129,87 @@ export const CycleTracker: React.FC<CycleTrackerProps> = ({
     settings.averageCycleLength,
     settings.averagePeriodLength
   );
+
+  // Determine cycle phase based on days since last period or cycle prediction
+  const cyclePhaseInfo = useMemo(() => {
+    if (currentLog.isPeriod && !currentLog.didNotOccur) {
+      return {
+        phase: 'Menstrual Phase 🌸',
+        badge: 'Rest & Replenish',
+        color: 'from-rose-50 to-pink-100',
+        borderColor: 'border-rose-200',
+        textColor: 'text-rose-950',
+        focus: 'Gentle rest, warmth, iron & magnesium',
+        tip: 'Honor your natural rhythm. Warm herbal teas, slow stretches, and warm nourishing foods.',
+      };
+    }
+
+    const sortedPeriodStarts = Object.entries(cycleLogs)
+      .filter(([_, log]) => log.isPeriod && !log.didNotOccur)
+      .map(([dKey]) => dKey)
+      .sort();
+
+    if (sortedPeriodStarts.length > 0) {
+      const pastStarts = sortedPeriodStarts.filter((k) => k <= selectedDate);
+      if (pastStarts.length > 0) {
+        const lastStart = pastStarts[pastStarts.length - 1];
+        const diffMs = parseDateKey(selectedDate).getTime() - parseDateKey(lastStart).getTime();
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1;
+
+        if (diffDays <= (settings.averagePeriodLength || 5)) {
+          return {
+            phase: 'Menstrual Phase 🌸',
+            badge: `Day ${diffDays} • Rest & Reset`,
+            color: 'from-rose-50 to-pink-100',
+            borderColor: 'border-rose-200',
+            textColor: 'text-rose-950',
+            focus: 'Replenishing iron, deep hydration & kindness',
+            tip: 'Slow down and recharge. Your body is naturally renewing its energy.',
+          };
+        } else if (diffDays <= 12) {
+          return {
+            phase: 'Follicular Phase 🌱',
+            badge: `Day ${diffDays} • Rising Energy`,
+            color: 'from-emerald-50 to-teal-50',
+            borderColor: 'border-emerald-200',
+            textColor: 'text-emerald-950',
+            focus: 'Creativity, fresh beginnings & goal setting',
+            tip: 'Estrogen is gently rising! Wonderful time for brainstorming, trying new recipes, and light workouts.',
+          };
+        } else if (diffDays <= 17) {
+          return {
+            phase: 'Ovulatory Phase ✨',
+            badge: `Day ${diffDays} • Peak Radiance`,
+            color: 'from-amber-50 to-orange-50',
+            borderColor: 'border-amber-200',
+            textColor: 'text-amber-950',
+            focus: 'High vitality, confident expression & social time',
+            tip: 'Your energy and communication are naturally sparkling. Enjoy social meetings, energetic movement, and vibrant meals.',
+          };
+        } else {
+          return {
+            phase: 'Luteal Phase 🌙',
+            badge: `Day ${diffDays} • Winding Down`,
+            color: 'from-purple-50 to-indigo-50',
+            borderColor: 'border-purple-200',
+            textColor: 'text-purple-950',
+            focus: 'Completing projects, grounding routines & cozy evenings',
+            tip: 'Progesterone encourages warmth and quiet comfort. Keep cozy, stay hydrated, and give yourself grace.',
+          };
+        }
+      }
+    }
+
+    return {
+      phase: 'Harmony & Wellness 🌿',
+      badge: 'Daily Balance',
+      color: 'from-pink-50 to-rose-50',
+      borderColor: 'border-pink-200',
+      textColor: 'text-pink-950',
+      focus: 'Hydration, mindfulness & mindful listening to your body',
+      tip: 'Listen gently to your body today. Tune into your energy and give yourself whatever comfort you need.',
+    };
+  }, [selectedDate, currentLog, cycleLogs, settings]);
 
   const handleTogglePeriod = () => {
     onUpdateCycleLog(selectedDate, {
@@ -576,97 +692,177 @@ export const CycleTracker: React.FC<CycleTrackerProps> = ({
           2. Self-Care Plan
           3. Cycle Insights & Notes
          ======================================================== */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 mt-3.5">
+      {/* ========================================================
+          MIDDLE & BOTTOM SECTION:
+          1. Compact Mood Tracker (Delicate, tight layout)
+          2. Energy & Vitality Level (Replaces unused self-care plan)
+          3. Soothing Herbal Hydration (Cups counter)
+         ======================================================== */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3.5">
         
-        {/* Mood Tracker (Image 1 style) */}
-        <div className="p-3.5 rounded-2xl bg-white border border-pink-200/90 shadow-2xs">
-          <h3 className="text-xs font-bold text-pink-950 uppercase tracking-wider mb-2 flex items-center gap-1 pb-1 border-b border-pink-100">
-            <span>😊</span>
-            <span>Mood Tracker</span>
-          </h3>
-
-          <div className="grid grid-cols-3 gap-2">
-            {MOODS.map((m) => (
-              <div
-                key={m.id}
-                className="p-1.5 rounded-xl bg-pink-50/30 border border-pink-100 text-center hover:bg-pink-50 transition cursor-pointer"
-              >
-                <div className="text-xl">{m.emoji}</div>
-                <div className="text-[10px] text-pink-950 font-medium mt-0.5">{m.label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Self-Care Plan (Image 1 style with coffee mug ☕) */}
-        <div className="p-3.5 rounded-2xl bg-white border border-pink-200/90 shadow-2xs">
-          <h3 className="text-xs font-bold text-pink-950 uppercase tracking-wider mb-2 flex items-center gap-1 pb-1 border-b border-pink-100">
-            <span>☕</span>
-            <span>Self-Care Plan</span>
-          </h3>
-
-          <div className="space-y-1">
-            {SELF_CARE_PLAN.slice(0, 5).map((plan) => (
-              <div
-                key={plan.id}
-                className="flex items-center gap-1.5 p-1 rounded-lg bg-pink-50/20 text-xs text-pink-950"
-              >
-                <span>{plan.icon}</span>
-                <span className="text-[11px] truncate flex-1">{plan.label}</span>
-                <span className="text-pink-400 text-xs">♡</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Cycle Details & Predictions (Image 1 style) */}
-        <div className="p-3.5 rounded-2xl bg-gradient-to-br from-[#fff2f6] via-[#fdf5f8] to-[#fff2f6] border border-pink-200/90 shadow-2xs flex flex-col justify-between">
-          <div>
-            <h3 className="text-xs font-bold text-pink-950 uppercase tracking-wider mb-2 flex items-center gap-1 pb-1 border-b border-pink-100">
-              <span>🌸</span>
-              <span>Cycle Insights</span>
+        {/* 1. Mood Tracker (Compact & Proportional, Delicate Border) */}
+        <div className="p-2.5 sm:p-3 rounded-2xl bg-white border border-pink-200/90 shadow-2xs flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-1.5 pb-1 border-b border-pink-100">
+            <h3 className="text-xs font-bold text-pink-950 uppercase tracking-wider flex items-center gap-1">
+              <span>😊</span>
+              <span>Mood Tracker</span>
             </h3>
-
-            <div className="space-y-1.5 text-xs text-pink-950">
-              <div className="flex items-center justify-between p-1.5 rounded-xl bg-white border border-pink-100">
-                <span className="text-[11px] text-stone-500">Average Cycle:</span>
-                <span className="font-bold text-pink-900">{settings.averageCycleLength} days</span>
-              </div>
-              <div className="flex items-center justify-between p-1.5 rounded-xl bg-white border border-pink-100">
-                <span className="text-[11px] text-stone-500">Duration:</span>
-                <span className="font-bold text-pink-900">{settings.averagePeriodLength} days</span>
-              </div>
-              {prediction.nextPeriodStart && (
-                <div className="flex items-center justify-between p-1.5 rounded-xl bg-white border border-pink-100">
-                  <span className="text-[11px] text-stone-500">Next Predicted:</span>
-                  <span className="font-bold text-rose-600">{prediction.nextPeriodStart}</span>
-                </div>
-              )}
-            </div>
+            {selectedMoods.length > 0 && (
+              <span className="text-[10px] text-pink-500 font-script">{selectedMoods.length} selected</span>
+            )}
           </div>
 
-          <div className="mt-2 p-2 rounded-xl bg-white text-center border border-pink-100 text-[10px] text-pink-800 font-script text-xs">
-            🌸 You are strong, beautiful and your body is amazing. ♡
+          <div className="grid grid-cols-3 gap-1.5">
+            {MOODS.map((m) => {
+              const isSelected = selectedMoods.includes(m.id);
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => handleToggleMood(m.id)}
+                  className={`py-1.5 px-1 rounded-xl text-center transition cursor-pointer border flex flex-col items-center justify-center gap-0.5 ${
+                    isSelected
+                      ? 'bg-pink-100/90 border-pink-300 text-pink-950 font-semibold shadow-2xs'
+                      : 'bg-pink-50/20 hover:bg-pink-50 border-pink-100/80 text-stone-700 opacity-80 hover:opacity-100'
+                  }`}
+                  title={isSelected ? `Click to deselect ${m.label}` : `Select ${m.label}`}
+                >
+                  <div className="text-lg leading-none select-none">{m.emoji}</div>
+                  <div className="text-[9.5px] text-pink-950 font-medium leading-tight">{m.label}</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 2. Daily Energy & Vitality Battery (Interactive & Actionable) */}
+        <div className="p-2.5 sm:p-3 rounded-2xl bg-white border border-pink-200/90 shadow-2xs flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-1.5 pb-1 border-b border-pink-100">
+            <h3 className="text-xs font-bold text-pink-950 uppercase tracking-wider flex items-center gap-1">
+              <Zap className="w-3.5 h-3.5 text-amber-500" />
+              <span>Vitality & Energy</span>
+            </h3>
+            <span className="text-[10px] text-amber-700 font-mono font-bold">
+              {energyLevel === 'vibrant' ? '⚡ 100%' : energyLevel === 'balanced' ? '🌿 75%' : energyLevel === 'low' ? '🪫 35%' : energyLevel === 'recharging' ? '🔋 Rest' : 'Tap to log'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-1.5">
+            {[
+              { id: 'vibrant' as const, label: 'Vibrant', icon: '⚡', desc: 'High Energy' },
+              { id: 'balanced' as const, label: 'Balanced', icon: '🌿', desc: 'Steady Pace' },
+              { id: 'low' as const, label: 'Low Battery', icon: '🪫', desc: 'Needs Calm' },
+              { id: 'recharging' as const, label: 'Recharging', icon: '🔋', desc: 'Rest Mode' },
+            ].map((lvl) => {
+              const active = energyLevel === lvl.id;
+              return (
+                <button
+                  key={lvl.id}
+                  type="button"
+                  onClick={() => handleSetEnergy(lvl.id)}
+                  className={`p-1.5 px-2 rounded-xl border text-left transition cursor-pointer flex items-center justify-between ${
+                    active
+                      ? 'bg-amber-100/90 border-amber-300 text-amber-950 font-semibold shadow-2xs'
+                      : 'bg-pink-50/20 hover:bg-pink-50 border-pink-100 text-stone-700'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-sm select-none">{lvl.icon}</span>
+                    <div className="min-w-0">
+                      <div className="text-[10.5px] font-bold leading-tight truncate">{lvl.label}</div>
+                      <div className="text-[9px] text-stone-500 leading-none truncate">{lvl.desc}</div>
+                    </div>
+                  </div>
+                  <span className="text-xs text-amber-600 font-bold ml-1">{active ? '✓' : ''}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 3. Herbal Warmth & Soothing Hydration (Cups Counter) */}
+        <div className="p-2.5 sm:p-3 rounded-2xl bg-white border border-pink-200/90 shadow-2xs flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-1.5 pb-1 border-b border-pink-100">
+            <h3 className="text-xs font-bold text-pink-950 uppercase tracking-wider flex items-center gap-1">
+              <Coffee className="w-3.5 h-3.5 text-pink-500" />
+              <span>Herbal Warmth & Teas</span>
+            </h3>
+            <span className="text-[10px] font-bold text-pink-700 font-mono">{hydrationCups} cups</span>
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="p-2 rounded-xl bg-pink-50/50 border border-pink-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-lg select-none">🫖</span>
+                <div>
+                  <div className="text-[11px] font-semibold text-pink-950">Chamomile & Warm Teas</div>
+                  <div className="text-[9.5px] text-pink-600 font-script">Soothing belly & body warmth</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleSetHydrationCups(-1)}
+                  disabled={hydrationCups <= 0}
+                  className="w-6 h-6 rounded-lg bg-white border border-pink-200 text-pink-700 text-xs font-bold flex items-center justify-center disabled:opacity-30 hover:bg-pink-100 cursor-pointer shadow-2xs"
+                >
+                  -
+                </button>
+                <span className="w-5 text-center font-bold text-xs text-pink-950">{hydrationCups}</span>
+                <button
+                  type="button"
+                  onClick={() => handleSetHydrationCups(1)}
+                  className="w-6 h-6 rounded-lg bg-pink-500 text-white text-xs font-bold flex items-center justify-center hover:bg-pink-600 cursor-pointer shadow-2xs"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-center gap-1 pt-0.5">
+              {[1, 2, 3, 4, 5, 6].map((cupIdx) => (
+                <button
+                  key={cupIdx}
+                  type="button"
+                  onClick={() => handleSetHydrationCups(cupIdx === hydrationCups ? -1 : cupIdx - hydrationCups)}
+                  className={`text-xs transition ${cupIdx <= hydrationCups ? 'text-pink-500 scale-110' : 'text-pink-200 hover:text-pink-300'}`}
+                  title={`${cupIdx} cups`}
+                >
+                  ☕
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* NEW FEATURE: PERSONAL NOTES & GENTLE REMINDERS FOR TODAY (Image 1 style) */}
-      <div className="mt-3.5 p-3.5 rounded-2xl bg-white border border-pink-200/90 shadow-2xs">
-        <div className="flex items-center justify-between mb-1.5">
-          <h3 className="text-xs font-bold text-pink-950 uppercase tracking-wider flex items-center gap-1.5">
-            <FileText className="w-3.5 h-3.5 text-pink-500" />
-            <span>Personal Notes & Gentle Reminders</span>
-          </h3>
-          <span className="text-[10px] text-pink-400 font-script">feelings & care ♡</span>
+      {/* ========================================================
+          CYCLE PHASE WISDOM & SYNC (Rich, empowering guidance based on body phase)
+         ======================================================== */}
+      <div className={`mt-3.5 p-3.5 rounded-2xl bg-gradient-to-r ${cyclePhaseInfo.color} border ${cyclePhaseInfo.borderColor} shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3`}>
+        <div className="space-y-1 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs sm:text-sm font-serif font-bold text-stone-900 flex items-center gap-1.5">
+              <span>{cyclePhaseInfo.phase}</span>
+            </span>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/80 border border-pink-200 text-pink-900 shadow-2xs">
+              {cyclePhaseInfo.badge}
+            </span>
+          </div>
+          <p className="text-xs text-stone-700 leading-relaxed font-sans">
+            <span className="font-bold">Focus:</span> {cyclePhaseInfo.focus} • {cyclePhaseInfo.tip}
+          </p>
         </div>
-        <textarea
-          rows={2}
-          value={currentLog.notes || ''}
-          onChange={(e) => handleSetNotes(e.target.value)}
-          placeholder="Log doctor appointments, medicine taken, body feelings, or gentle reminders..."
-          className="w-full p-2.5 text-xs bg-pink-50/20 border border-pink-100 rounded-xl focus:bg-white focus:outline-none focus:ring-1 focus:ring-pink-300 text-pink-950 resize-none leading-relaxed"
-        />
+
+        {/* Prediction summary pill */}
+        <div className="flex items-center gap-2 self-start sm:self-auto shrink-0 bg-white/90 px-3 py-1.5 rounded-xl border border-pink-200 shadow-2xs text-xs">
+          <div className="text-right">
+            <div className="text-[10px] text-stone-500 leading-none">Next Cycle Start:</div>
+            <div className="font-bold text-rose-600 mt-0.5 font-mono">
+              {prediction.nextPeriodStart || 'Tracking...'}
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* BOTTOM QUOTE RIBBON (Image 1 style) */}

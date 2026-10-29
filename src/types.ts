@@ -109,6 +109,10 @@ export interface CycleDayLog {
   notes?: string;
   painLevel?: number; // 0 to 10 comfort/pain rating
   temperature?: number;
+  moods?: string[]; // Multiple mood selections for the day
+  selfCare?: string[]; // Checked self-care plan items
+  energyLevel?: 'vibrant' | 'balanced' | 'low' | 'recharging';
+  hydrationCups?: number;
 }
 
 export interface Habit {
@@ -127,6 +131,7 @@ export interface DayHabitProgress {
 
 export type EventRecurrence = 
   | 'none' 
+  | 'date-range'
   | 'daily' 
   | 'weekly' 
   | 'weekly-custom' 
@@ -160,6 +165,7 @@ export interface DayLog {
   witItems?: DailyWitItem[]; // Jokes, idioms and catchy phrases of the day
   middayCheckIn?: MiddayCheckIn; // Midday pulse, mood change, and cravings
   mood?: MoodType;
+  moods?: MoodType[]; // Multiple mood selections for the day
   energyLevel?: number; // 1 to 5 stars/hearts
   meals?: {
     breakfast?: string;

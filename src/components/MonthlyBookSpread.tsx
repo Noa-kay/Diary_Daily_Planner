@@ -538,24 +538,37 @@ export const MonthlyBookSpread: React.FC<MonthlyBookSpreadProps> = ({
                 {/* Day Mood Face, Duolingo 🦉 & 🌸 Indicator Row */}
                 <div className="flex items-center justify-between text-xs px-0.5 min-h-[14px]">
                   <div className="flex items-center gap-1">
-                    {/* Mood Face if chosen for this day */}
-                    {dayLogs[cell.key]?.mood ? (
-                      <span className="text-xs select-none leading-none" title="Mood Today">
-                        {dayLogs[cell.key].mood === 'great'
-                          ? '💖'
-                          : dayLogs[cell.key].mood === 'creative'
-                          ? '🌷'
-                          : dayLogs[cell.key].mood === 'calm'
-                          ? '✨'
-                          : dayLogs[cell.key].mood === 'tired'
-                          ? '🥱'
-                          : dayLogs[cell.key].mood === 'stressed'
-                          ? '🌧️'
-                          : dayLogs[cell.key].mood === 'angry'
-                          ? '😠'
-                          : '🥺'}
-                      </span>
-                    ) : null}
+                    {/* Mood Face(s) if chosen for this day */}
+                    {(() => {
+                      const log = dayLogs[cell.key];
+                      const moodsList: string[] = log?.moods && log.moods.length > 0
+                        ? log.moods
+                        : log?.mood
+                        ? [log.mood]
+                        : [];
+
+                      if (moodsList.length === 0) return null;
+
+                      const moodToEmoji = (m: string) => {
+                        switch (m) {
+                          case 'great': return '💖';
+                          case 'creative': return '🌷';
+                          case 'calm': return '✨';
+                          case 'tired': return '🥱';
+                          case 'stressed': return '🌧️';
+                          case 'angry': return '😠';
+                          default: return '✨';
+                        }
+                      };
+
+                      return (
+                        <div className="flex items-center gap-0.5 text-[11px] select-none leading-none" title="Mood(s) Today">
+                          {moodsList.slice(0, 3).map((m, idx) => (
+                            <span key={idx}>{moodToEmoji(m)}</span>
+                          ))}
+                        </div>
+                      );
+                    })()}
 
                     {/* Discreet Duolingo indicator - shown ONLY when completed on that day! */}
                     {isDuolingoDone && (

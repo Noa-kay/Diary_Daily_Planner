@@ -507,13 +507,18 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
   const [selectedEventIcon, setSelectedEventIcon] = useState<string>('🎂');
   const [newEventRecurrence, setNewEventRecurrence] = useState<EventRecurrence>('none');
   const [newEventDays, setNewEventDays] = useState<number[]>(() => [parseDateKey(selectedDate).getDay()]);
+  const [newEventEndDate, setNewEventEndDate] = useState<string>('');
   const [isIconPickerOpen, setIsIconPickerOpen] = useState(false);
   const [isRecurrencePickerOpen, setIsRecurrencePickerOpen] = useState(false);
   const [quickChangeIndex, setQuickChangeIndex] = useState<number | null>(null);
 
-  // Update default day of week when selectedDate changes
+  // Update default day of week and default end date when selectedDate changes
   useEffect(() => {
     setNewEventDays([parseDateKey(selectedDate).getDay()]);
+    // Default end date to 2 days after selectedDate
+    const d = parseDateKey(selectedDate);
+    d.setDate(d.getDate() + 2);
+    setNewEventEndDate(formatDateKey(d));
   }, [selectedDate]);
 
   // Google Calendar Integration State
@@ -539,6 +544,7 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
   const [editingEventIcon, setEditingEventIcon] = useState<string>('🎂');
   const [editingEventRecurrence, setEditingEventRecurrence] = useState<EventRecurrence>('none');
   const [editingEventDays, setEditingEventDays] = useState<number[]>([]);
+  const [editingEventEndDate, setEditingEventEndDate] = useState<string>('');
   const [editingPickerOpen, setEditingPickerOpen] = useState(false);
   const [editingRecurrencePickerOpen, setEditingRecurrencePickerOpen] = useState(false);
 
@@ -553,8 +559,11 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
     const daysToUse = recurrenceToUse === 'weekly-custom'
       ? (newEventDays.length > 0 ? newEventDays : [parseDateKey(selectedDate).getDay()])
       : (recurrenceToUse === 'weekly' ? [parseDateKey(selectedDate).getDay()] : undefined);
+    const endDateToUse = recurrenceToUse === 'date-range'
+      ? (newEventEndDate && newEventEndDate >= selectedDate ? newEventEndDate : selectedDate)
+      : undefined;
 
-    const finalEvent = formatEventItem(iconToUse, titleToUse, recurrenceToUse, selectedDate, daysToUse);
+    const finalEvent = formatEventItem(iconToUse, titleToUse, recurrenceToUse, selectedDate, daysToUse, endDateToUse);
     const updated = [...importantEvents, finalEvent];
     onUpdateDayLog(selectedDate, { importantEvents: updated });
     setNewEventText('');
@@ -563,9 +572,12 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
     setIsIconPickerOpen(false);
     setIsRecurrencePickerOpen(false);
 
-    if (recurrenceToUse === 'weekly-custom' && daysToUse && daysToUse.length > 0) {
-      const dayNames = daysToUse.map((d) => WEEKDAY_SHORT_HEB[d]).join(', ');
-      setGcalStatusMsg(`💪 נקבע בהצלחה בימים קבועים בכל שבוע: ${dayNames}`);
+    if (recurrenceToUse === 'date-range' && endDateToUse) {
+      setGcalStatusMsg(`🗓️ Multi-day event added from ${selectedDate} to ${endDateToUse} ✨`);
+      setTimeout(() => setGcalStatusMsg(null), 4000);
+    } else if (recurrenceToUse === 'weekly-custom' && daysToUse && daysToUse.length > 0) {
+      const dayNames = daysToUse.map((d) => WEEKDAY_NAMES_EN[d]).join(', ');
+      setGcalStatusMsg(`💪 Scheduled weekly on: ${dayNames}`);
       setTimeout(() => setGcalStatusMsg(null), 4000);
     }
 
@@ -586,7 +598,8 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
       item.parsed.title,
       item.parsed.recurrence,
       targetDateForEdit,
-      item.parsed.repeatDays
+      item.parsed.repeatDays,
+      item.parsed.endDate
     );
     const sourceLogEvents =
       (allDayLogs && allDayLogs[targetDateForEdit]?.importantEvents) ||
@@ -609,6 +622,7 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
     setEditingEventIcon(item.parsed.icon !== '✦' ? item.parsed.icon : '🎂');
     setEditingEventText(item.parsed.title);
     setEditingEventRecurrence(item.parsed.recurrence);
+    setEditingEventEndDate(item.parsed.endDate || selectedDate);
     setEditingEventDays(
       item.parsed.repeatDays && item.parsed.repeatDays.length > 0
         ? item.parsed.repeatDays
@@ -630,7 +644,8 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
         trimmed,
         editingEventRecurrence,
         targetDateForEdit,
-        editingEventRecurrence === 'weekly-custom' ? editingEventDays : undefined
+        editingEventRecurrence === 'weekly-custom' ? editingEventDays : undefined,
+        editingEventRecurrence === 'date-range' ? editingEventEndDate : undefined
       );
       const sourceLogEvents =
         (allDayLogs && allDayLogs[targetDateForEdit]?.importantEvents) ||
@@ -648,6 +663,7 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
     }
     setEditingEventIndex(null);
     setEditingEventText('');
+    setEditingEventEndDate('');
     setEditingPickerOpen(false);
     setEditingRecurrencePickerOpen(false);
   };
@@ -655,6 +671,7 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
   const handleCancelEditEvent = () => {
     setEditingEventIndex(null);
     setEditingEventText('');
+    setEditingEventEndDate('');
     setEditingPickerOpen(false);
     setEditingRecurrencePickerOpen(false);
   };
@@ -723,8 +740,21 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
 
   // Thoughts & Gratitude
   const dailyThoughts = dayLog?.dailyThoughts || '';
-  const currentMood = dayLog?.mood || 'calm';
+  const currentMood = dayLog?.mood;
+  const currentMoods: MoodType[] = dayLog?.moods || (dayLog?.mood ? [dayLog.mood] : []);
   const gratitude = dayLog?.gratitude || '';
+
+  const handleToggleDayMood = (mType: MoodType) => {
+    const isSelected = currentMoods.includes(mType);
+    const nextMoods = isSelected
+      ? currentMoods.filter((t) => t !== mType)
+      : [...currentMoods, mType];
+
+    onUpdateDayLog(selectedDate, {
+      mood: nextMoods[0] || undefined,
+      moods: nextMoods,
+    });
+  };
 
   // Pink Flower & Cycle Tracking
   const isFlowerDay = Boolean(cycleLog?.isPeriod && !cycleLog?.didNotOccur);
@@ -928,42 +958,6 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
       }
     }
     return count;
-  };
-
-  // ── MIDDAY PULSE & MOOD PIVOT ──
-  const middayCheckIn = dayLog?.middayCheckIn;
-  const [isEditingMidday, setIsEditingMidday] = useState(!middayCheckIn?.completed);
-  const [middayMoodShift, setMiddayMoodShift] = useState(middayCheckIn?.moodShift || '');
-  const [middayCraving, setMiddayCraving] = useState(middayCheckIn?.cravingOrDesire || '');
-  const [middayIntention, setMiddayIntention] = useState(middayCheckIn?.afternoonIntention || '');
-
-  // Keep state synced with dayLog when date changes
-  useEffect(() => {
-    const checkIn = dayLog?.middayCheckIn;
-    setMiddayMoodShift(checkIn?.moodShift || '');
-    setMiddayCraving(checkIn?.cravingOrDesire || '');
-    setMiddayIntention(checkIn?.afternoonIntention || '');
-    setIsEditingMidday(!checkIn?.completed);
-  }, [selectedDate, dayLog?.middayCheckIn]);
-
-  const handleSaveMiddayPulse = (e: React.FormEvent) => {
-    e.preventDefault();
-    onUpdateDayLog(selectedDate, {
-      middayCheckIn: {
-        timestamp: Date.now(),
-        moodShift: middayMoodShift || 'Peaceful & Grounded',
-        cravingOrDesire: middayCraving,
-        afternoonIntention: middayIntention,
-        completed: true,
-      },
-    });
-    setIsEditingMidday(false);
-    confetti({
-      particleCount: 25,
-      spread: 45,
-      origin: { y: 0.7 },
-      colors: ['#fbbf24', '#f472b6', '#38bdf8'],
-    });
   };
 
   // ── DAILY WIT, JOKES & IDIOMS (Multiple items support) ──
@@ -1295,13 +1289,15 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                       >
                         <span>
                           {editingEventRecurrence === 'none'
-                            ? '🗓️ Once'
+                            ? '🗓️ Single Day'
+                            : editingEventRecurrence === 'date-range'
+                            ? `🗓️ Multi-Day (→ ${editingEventEndDate || 'End Date'})`
                             : editingEventRecurrence === 'daily'
                             ? '☀️ Daily'
                             : editingEventRecurrence === 'weekly'
                             ? '🔁 Weekly'
                             : editingEventRecurrence === 'weekly-custom'
-                            ? `💪 Days (${editingEventDays.map((d) => WEEKDAY_SHORT_HEB[d]).join(', ') || 'Choose'})`
+                            ? `💪 Days (${editingEventDays.map((d) => WEEKDAY_NAMES_EN[d]).join(', ') || 'Choose'})`
                             : editingEventRecurrence === 'yearly-gregorian'
                             ? '📅 Yearly (Solar)'
                             : '🕍 Yearly (Hebrew)'}
@@ -1321,9 +1317,43 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                               editingEventRecurrence === 'none' ? 'bg-pink-100 text-pink-900 font-semibold' : 'hover:bg-pink-50 text-stone-700'
                             }`}
                           >
-                            <span>▫️ One-off (No repeat)</span>
+                            <span>▫️ Single Day (Today only)</span>
                             {editingEventRecurrence === 'none' && <Check className="w-3.5 h-3.5 text-pink-600" />}
                           </button>
+
+                          {/* Multi-Day Date Range in Edit Mode */}
+                          <div className={`p-2 rounded-xl border transition ${
+                            editingEventRecurrence === 'date-range'
+                              ? 'bg-indigo-50/80 border-indigo-300'
+                              : 'bg-stone-50 border-stone-200'
+                          }`}>
+                            <div
+                              onClick={() => {
+                                setEditingEventRecurrence('date-range');
+                                if (!editingEventEndDate) {
+                                  setEditingEventEndDate(selectedDate);
+                                }
+                              }}
+                              className="flex items-center justify-between cursor-pointer pb-1 mb-1 border-b border-indigo-200/60"
+                            >
+                              <span className="font-semibold text-indigo-950 flex items-center gap-1">
+                                <span>🗓️ Multi-Day (Date Range)</span>
+                              </span>
+                              {editingEventRecurrence === 'date-range' && (
+                                <Check className="w-3.5 h-3.5 text-indigo-600" />
+                              )}
+                            </div>
+                            <div className="space-y-1 pt-0.5">
+                              <span className="text-[10px] text-indigo-900 font-medium block">End Date:</span>
+                              <input
+                                type="date"
+                                min={selectedDate}
+                                value={editingEventEndDate}
+                                onChange={(e) => setEditingEventEndDate(e.target.value)}
+                                className="w-full text-xs p-1 bg-white border border-indigo-200 rounded-lg text-indigo-950 font-mono"
+                              />
+                            </div>
+                          </div>
 
                           <button
                             type="button"
@@ -1339,7 +1369,7 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                             {editingEventRecurrence === 'weekly' && <Check className="w-3.5 h-3.5 text-pink-600" />}
                           </button>
 
-                          {/* Weekly Custom Days Option (Fitness, lessons, classes) */}
+                          {/* Weekly Custom Days Option */}
                           <div className={`p-2 rounded-xl border transition ${
                             editingEventRecurrence === 'weekly-custom'
                               ? 'bg-pink-50/80 border-pink-300'
@@ -1362,10 +1392,10 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                               )}
                             </div>
                             <p className="text-[10px] text-pink-800/80 mb-1.5">
-                              אימוני כושר, חוגים או פעילות שבועית בימים קבועים:
+                              Workouts, classes, or recurring activities:
                             </p>
                             <div className="flex items-center justify-between gap-1">
-                              {WEEKDAY_SHORT_HEB.map((hebName, dIdx) => {
+                              {WEEKDAY_NAMES_EN.map((enName, dIdx) => {
                                 const isSel = editingEventDays.includes(dIdx);
                                 return (
                                   <button
@@ -1385,9 +1415,9 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                                         ? 'bg-pink-500 text-white shadow-2xs scale-105'
                                         : 'bg-white text-stone-600 border border-pink-200 hover:bg-pink-100'
                                     }`}
-                                    title={WEEKDAY_FULL_HEB[dIdx]}
+                                    title={enName}
                                   >
-                                    {hebName}
+                                    {enName.charAt(0)}
                                   </button>
                                 );
                               })}
@@ -1530,50 +1560,59 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                     {parsed.title}
                   </span>
 
-                  {/* Recurrence Badge */}
+                  {/* Recurrence Badges - 100% English */}
+                  {parsed.recurrence === 'date-range' && (
+                    <span
+                      className="text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-900 border border-indigo-200/80 font-medium inline-flex items-center gap-0.5 select-none"
+                      title={`Multi-day event: ${parsed.startDate || item.originalDate} to ${parsed.endDate || ''}`}
+                    >
+                      <span>🗓️</span>
+                      <span>Multi-Day ({parsed.startDate || item.originalDate} → {parsed.endDate || ''})</span>
+                    </span>
+                  )}
                   {parsed.recurrence === 'weekly-custom' && (
                     <span
                       className="text-[10px] px-1.5 py-0.5 rounded-md bg-rose-50 text-rose-800 border border-rose-200/80 font-medium inline-flex items-center gap-0.5 select-none"
-                      title={`חוזר בימים: ${parsed.repeatDays?.map((d) => WEEKDAY_FULL_HEB[d]).join(', ')}`}
+                      title={`Repeats on: ${parsed.repeatDays?.map((d) => WEEKDAY_NAMES_EN[d]).join(', ')}`}
                     >
                       <span>💪</span>
-                      <span>{parsed.repeatDays?.map((d) => WEEKDAY_SHORT_HEB[d]).join(', ') || 'שבועי'}</span>
+                      <span>{parsed.repeatDays?.map((d) => WEEKDAY_NAMES_EN[d]).join(', ') || 'Weekly'}</span>
                     </span>
                   )}
                   {parsed.recurrence === 'weekly' && (
                     <span
                       className="text-[10px] px-1.5 py-0.5 rounded-md bg-sky-50 text-sky-800 border border-sky-200/80 font-medium inline-flex items-center gap-0.5 select-none"
-                      title={`חוזר בכל שבוע ביום ${WEEKDAY_FULL_HEB[parseDateKey(item.originalDate || selectedDate).getDay()]}`}
+                      title={`Repeats every ${WEEKDAY_NAMES_EN[parseDateKey(item.originalDate || selectedDate).getDay()]}`}
                     >
                       <span>🔁</span>
-                      <span>שבועי ({WEEKDAY_SHORT_HEB[parseDateKey(item.originalDate || selectedDate).getDay()]})</span>
+                      <span>Weekly ({WEEKDAY_NAMES_EN[parseDateKey(item.originalDate || selectedDate).getDay()]})</span>
                     </span>
                   )}
                   {parsed.recurrence === 'daily' && (
                     <span
                       className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200/80 font-medium inline-flex items-center gap-0.5 select-none"
-                      title="חוזר בכל יום"
+                      title="Repeats every day"
                     >
                       <span>☀️</span>
-                      <span>יומי</span>
+                      <span>Daily</span>
                     </span>
                   )}
                   {parsed.recurrence === 'yearly-gregorian' && (
                     <span
                       className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200/80 font-medium inline-flex items-center gap-0.5 select-none"
-                      title="חוזר בכל שנה בתאריך לועזי"
+                      title="Repeats annually on Solar / Gregorian calendar"
                     >
                       <span>📅</span>
-                      <span>שנתי (לועזי)</span>
+                      <span>Yearly (Solar)</span>
                     </span>
                   )}
                   {parsed.recurrence === 'yearly-hebrew' && (
                     <span
                       className="text-[10px] px-1.5 py-0.5 rounded-md bg-purple-50 text-purple-800 border border-purple-200/80 font-medium inline-flex items-center gap-0.5 select-none"
-                      title="חוזר בכל שנה בתאריך עברי"
+                      title="Repeats annually on Hebrew calendar"
                     >
                       <span>🕍</span>
-                      <span>שנתי (עברי)</span>
+                      <span>Yearly (Hebrew)</span>
                     </span>
                   )}
 
@@ -1613,7 +1652,7 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
         ) : (
           <div className="mb-3 py-2.5 px-3 rounded-xl bg-white/70 border border-dashed border-pink-200/80 text-center text-xs text-pink-400 italic flex items-center justify-center gap-1.5">
             <span>✨</span>
-            <span>No events for this date • Pick an icon & recurrence (Solar/Hebrew/Once) and add your event below</span>
+            <span>No events for this date • Pick an icon, timing (Multi-Day / Single / Weekly / Yearly) and add your event below</span>
           </div>
         )}
 
@@ -1676,7 +1715,7 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
               )}
             </div>
 
-            {/* 2. Dedicated Recurrence Selector button on the side */}
+            {/* 2. Dedicated Recurrence Selector button on the side - 100% English */}
             <div className="relative shrink-0">
               <button
                 type="button"
@@ -1686,11 +1725,13 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                     ? 'bg-pink-100 border-pink-400 text-pink-950 font-semibold'
                     : 'bg-white border-pink-300 hover:border-pink-400 hover:bg-pink-50/70 text-pink-950'
                 }`}
-                title="Select Recurrence (Daily, Weekly, Workouts, Solar, Hebrew)"
+                title="Select Recurrence (Single Day, Multi-Day Range, Weekly, Daily, Yearly)"
               >
                 <span className="text-pink-500">
                   {newEventRecurrence === 'none'
                     ? '🗓️'
+                    : newEventRecurrence === 'date-range'
+                    ? '📅'
                     : newEventRecurrence === 'weekly-custom'
                     ? '💪'
                     : newEventRecurrence === 'weekly'
@@ -1703,38 +1744,42 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                 </span>
                 <span className="hidden sm:inline">
                   {newEventRecurrence === 'none'
-                    ? 'חד-פעמי'
+                    ? 'Single Day'
+                    : newEventRecurrence === 'date-range'
+                    ? `Multi-Day (${newEventEndDate ? `to ${newEventEndDate.slice(5)}` : 'Range'})`
                     : newEventRecurrence === 'weekly-custom'
-                    ? `ימים (${newEventDays.map((d) => WEEKDAY_SHORT_HEB[d]).join(', ') || 'בחר'})`
+                    ? `Days (${newEventDays.map((d) => WEEKDAY_NAMES_EN[d]).join(', ') || 'Choose'})`
                     : newEventRecurrence === 'weekly'
-                    ? `שבועי (${WEEKDAY_SHORT_HEB[parseDateKey(selectedDate).getDay()]})`
+                    ? `Weekly (${WEEKDAY_NAMES_EN[parseDateKey(selectedDate).getDay()]})`
                     : newEventRecurrence === 'daily'
-                    ? 'יומי (כל יום)'
+                    ? 'Daily (Every day)'
                     : newEventRecurrence === 'yearly-gregorian'
-                    ? 'שנתי (לועזי)'
-                    : 'שנתי (עברי)'}
+                    ? 'Yearly (Solar)'
+                    : 'Yearly (Hebrew)'}
                 </span>
                 <span className="sm:hidden">
                   {newEventRecurrence === 'none'
-                    ? 'חד״פ'
+                    ? 'Once'
+                    : newEventRecurrence === 'date-range'
+                    ? 'Range'
                     : newEventRecurrence === 'weekly-custom'
-                    ? 'ימים'
+                    ? 'Days'
                     : newEventRecurrence === 'weekly'
-                    ? 'שבועי'
+                    ? 'Weekly'
                     : newEventRecurrence === 'daily'
-                    ? 'יומי'
+                    ? 'Daily'
                     : newEventRecurrence === 'yearly-gregorian'
-                    ? 'לועזי'
-                    : 'עברי'}
+                    ? 'Solar'
+                    : 'Hebrew'}
                 </span>
                 <span className="text-[9px] text-pink-400 select-none">▼</span>
               </button>
 
-              {/* Recurrence Dropdown */}
+              {/* Recurrence Dropdown - 100% English */}
               {isRecurrencePickerOpen && (
                 <div className="absolute top-full left-0 mt-1.5 z-40 p-2.5 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-pink-200 w-72 max-h-96 overflow-y-auto space-y-2">
                   <div className="text-[10px] font-semibold text-pink-900 border-b border-pink-100 pb-1 mb-1 px-1 flex justify-between items-center">
-                    <span>תדירות חזרה / Recurrence</span>
+                    <span>Event Timing & Recurrence</span>
                     <button
                       type="button"
                       onClick={() => setIsRecurrencePickerOpen(false)}
@@ -1744,6 +1789,7 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                     </button>
                   </div>
 
+                  {/* Single Day */}
                   <button
                     type="button"
                     onClick={() => {
@@ -1757,10 +1803,37 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                     }`}
                   >
                     <div className="flex flex-col text-left">
-                      <span className="font-medium">▫️ חד-פעמי (לתאריך זה בלבד)</span>
-                      <span className="text-[10px] text-stone-500">Single event for this date only</span>
+                      <span className="font-medium">▫️ Single Day (Today only)</span>
+                      <span className="text-[10px] text-stone-500">Event occurs on this date only</span>
                     </div>
                     {newEventRecurrence === 'none' && <Check className="w-3.5 h-3.5 text-pink-600" />}
+                  </button>
+
+                  {/* Multi-Day Date Range (Consecutive days e.g. trips, seminars) */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewEventRecurrence('date-range');
+                      if (!newEventEndDate || newEventEndDate < selectedDate) {
+                        const d = parseDateKey(selectedDate);
+                        d.setDate(d.getDate() + 2);
+                        setNewEventEndDate(formatDateKey(d));
+                      }
+                      setIsRecurrencePickerOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded-xl text-xs flex items-center justify-between transition cursor-pointer ${
+                      newEventRecurrence === 'date-range'
+                        ? 'bg-indigo-100 text-indigo-950 font-semibold'
+                        : 'hover:bg-indigo-50/60 text-stone-700'
+                    }`}
+                  >
+                    <div className="flex flex-col text-left">
+                      <span className="font-medium">🗓️ Multi-Day / Date Range</span>
+                      <span className="text-[10px] text-stone-500">
+                        Consecutive days (e.g. 3-day trip, conference, seminar)
+                      </span>
+                    </div>
+                    {newEventRecurrence === 'date-range' && <Check className="w-3.5 h-3.5 text-indigo-600" />}
                   </button>
 
                   {/* Weekly Custom Days Option (Fitness, lessons, workouts) */}
@@ -1782,10 +1855,10 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                     >
                       <div className="flex flex-col text-left">
                         <span className="font-semibold text-pink-950 flex items-center gap-1">
-                          <span>💪 שבועי בימים נבחרים</span>
+                          <span>💪 Weekly on selected days</span>
                         </span>
                         <span className="text-[10px] text-pink-700 font-normal">
-                          אימוני כושר, חוגים או פעילות כמה פעמים בשבוע
+                          Workouts, classes, or recurring activities
                         </span>
                       </div>
                       {newEventRecurrence === 'weekly-custom' && (
@@ -1794,7 +1867,7 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                     </div>
 
                     <div className="flex items-center justify-between gap-1 mb-2">
-                      {WEEKDAY_SHORT_HEB.map((hebName, dIdx) => {
+                      {WEEKDAY_NAMES_EN.map((enName, dIdx) => {
                         const isSel = newEventDays.includes(dIdx);
                         return (
                           <button
@@ -1814,9 +1887,9 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                                 ? 'bg-pink-600 text-white shadow-2xs scale-105'
                                 : 'bg-white text-stone-600 border border-pink-200 hover:bg-pink-100'
                             }`}
-                            title={WEEKDAY_FULL_HEB[dIdx]}
+                            title={enName}
                           >
-                            {hebName}
+                            {enName.charAt(0)}
                           </button>
                         );
                       })}
@@ -1824,7 +1897,7 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
 
                     {/* Presets */}
                     <div className="flex items-center gap-1 flex-wrap text-[10px]">
-                      <span className="text-stone-400">קיצורים:</span>
+                      <span className="text-stone-400">Presets:</span>
                       <button
                         type="button"
                         onClick={(e) => {
@@ -1834,7 +1907,7 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                         }}
                         className="px-2 py-0.5 rounded-md bg-white border border-pink-200 text-pink-800 hover:bg-pink-100 font-medium cursor-pointer"
                       >
-                        א׳, ג׳, ה׳ (אימונים)
+                        Sun, Tue, Thu
                       </button>
                       <button
                         type="button"
@@ -1845,7 +1918,7 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                         }}
                         className="px-2 py-0.5 rounded-md bg-white border border-pink-200 text-pink-800 hover:bg-pink-100 font-medium cursor-pointer"
                       >
-                        ב׳, ד׳
+                        Mon, Wed
                       </button>
                       <button
                         type="button"
@@ -1856,7 +1929,7 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                         }}
                         className="px-2 py-0.5 rounded-md bg-white border border-pink-200 text-pink-800 hover:bg-pink-100 font-medium cursor-pointer"
                       >
-                        א׳-ה׳
+                        Weekdays
                       </button>
                     </div>
                   </div>
@@ -1874,9 +1947,9 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                     }`}
                   >
                     <div className="flex flex-col text-left">
-                      <span className="font-medium">🔁 שבועי (באותו יום בשבוע)</span>
+                      <span className="font-medium">🔁 Weekly (Same weekday)</span>
                       <span className="text-[10px] text-stone-500">
-                        חוזר בכל יום {WEEKDAY_FULL_HEB[parseDateKey(selectedDate).getDay()]}
+                        Repeats every {WEEKDAY_NAMES_EN[parseDateKey(selectedDate).getDay()]}
                       </span>
                     </div>
                     {newEventRecurrence === 'weekly' && <Check className="w-3.5 h-3.5 text-pink-600" />}
@@ -1895,8 +1968,8 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                     }`}
                   >
                     <div className="flex flex-col text-left">
-                      <span className="font-medium">☀️ יומי (בכל יום)</span>
-                      <span className="text-[10px] text-stone-500">Every single day</span>
+                      <span className="font-medium">☀️ Daily (Every single day)</span>
+                      <span className="text-[10px] text-stone-500">Appears every single day</span>
                     </div>
                     {newEventRecurrence === 'daily' && <Check className="w-3.5 h-3.5 text-pink-600" />}
                   </button>
@@ -1914,9 +1987,9 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                     }`}
                   >
                     <div className="flex flex-col text-left">
-                      <span className="font-medium">📅 שנתי (לוח לועזי)</span>
+                      <span className="font-medium">📅 Yearly (Solar / Gregorian)</span>
                       <span className="text-[10px] text-pink-600 font-normal">
-                        חוזר בכל שנה ב-{selectedDate.slice(5)}
+                        Repeats annually on {selectedDate.slice(5)}
                       </span>
                     </div>
                     {newEventRecurrence === 'yearly-gregorian' && <Check className="w-3.5 h-3.5 text-pink-600" />}
@@ -1935,9 +2008,9 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                     }`}
                   >
                     <div className="flex flex-col text-left">
-                      <span className="font-medium">🕍 שנתי (לוח עברי)</span>
+                      <span className="font-medium">🕍 Yearly (Hebrew Calendar)</span>
                       <span className="text-[10px] text-pink-600 font-normal">
-                        חוזר בכל שנה ב-{hebrewInfo.shortHebrewDateStr || 'תאריך עברי'}
+                        Repeats annually on Hebrew date
                       </span>
                     </div>
                     {newEventRecurrence === 'yearly-hebrew' && <Check className="w-3.5 h-3.5 text-pink-600" />}
@@ -1953,7 +2026,7 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
               type="text"
               value={newEventText}
               onChange={(e) => setNewEventText(e.target.value)}
-              placeholder="כותרת אירוע או שגרה (למשל: אימון כושר, חוג, יום הולדת, טיסה)..."
+              placeholder="Event, trip or routine title (e.g. Flight to London, Yoga Retreat, Seminar)..."
               className="w-full px-3.5 py-2 text-xs bg-white rounded-xl border border-pink-200 focus:outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200/50 text-pink-950 placeholder:text-pink-300 shadow-2xs transition"
             />
           </div>
@@ -1965,22 +2038,75 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
             className="px-4 py-2 rounded-xl bg-pink-500 hover:bg-pink-600 disabled:opacity-40 text-white text-xs font-semibold shadow-2xs transition cursor-pointer shrink-0 flex items-center justify-center gap-1.5"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>הוסף / Add</span>
+            <span>Add Event</span>
           </button>
         </form>
+
+        {/* Inline Date Range Picker if date-range is active */}
+        {newEventRecurrence === 'date-range' && (
+          <div className="mt-2.5 p-2.5 rounded-2xl bg-indigo-50/90 border border-indigo-200/90 flex flex-wrap items-center justify-between gap-2 shadow-2xs animate-in fade-in">
+            <div className="flex items-center gap-1.5 text-xs text-indigo-950 font-semibold">
+              <span>🗓️</span>
+              <span>Multi-Day Event: From {selectedDate} to</span>
+              <input
+                type="date"
+                min={selectedDate}
+                value={newEventEndDate}
+                onChange={(e) => setNewEventEndDate(e.target.value)}
+                className="px-2.5 py-1 text-xs font-mono font-bold bg-white rounded-lg border border-indigo-300 text-indigo-950 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+              />
+            </div>
+            <div className="flex items-center gap-1 text-[10px]">
+              <span className="text-indigo-500 font-medium">Duration:</span>
+              <button
+                type="button"
+                onClick={() => {
+                  const d = parseDateKey(selectedDate);
+                  d.setDate(d.getDate() + 2); // 3 days total
+                  setNewEventEndDate(formatDateKey(d));
+                }}
+                className="px-2 py-0.5 rounded-md bg-white border border-indigo-200 text-indigo-800 hover:bg-indigo-100 font-medium cursor-pointer"
+              >
+                3 Days (+2d)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const d = parseDateKey(selectedDate);
+                  d.setDate(d.getDate() + 4);
+                  setNewEventEndDate(formatDateKey(d));
+                }}
+                className="px-2 py-0.5 rounded-md bg-white border border-indigo-200 text-indigo-800 hover:bg-indigo-100 font-medium cursor-pointer"
+              >
+                5 Days (+4d)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const d = parseDateKey(selectedDate);
+                  d.setDate(d.getDate() + 6);
+                  setNewEventEndDate(formatDateKey(d));
+                }}
+                className="px-2 py-0.5 rounded-md bg-white border border-indigo-200 text-indigo-800 hover:bg-indigo-100 font-medium cursor-pointer"
+              >
+                1 Week (+6d)
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Inline Day Selector if weekly-custom is active */}
         {newEventRecurrence === 'weekly-custom' && (
           <div className="mt-2.5 p-2.5 rounded-2xl bg-pink-50/90 border border-pink-200/90 flex flex-wrap items-center justify-between gap-2 shadow-2xs animate-in fade-in">
             <div className="flex items-center gap-1.5 text-xs text-pink-950 font-semibold">
               <span>💪</span>
-              <span>ימי חזרה קבועים לאירוע:</span>
+              <span>Weekly Recurring Days:</span>
               <span className="text-[11px] font-normal text-pink-700">
-                ({newEventDays.length > 0 ? newEventDays.map((d) => WEEKDAY_SHORT_HEB[d]).join(', ') : 'סמנו ימים למטה'})
+                ({newEventDays.length > 0 ? newEventDays.map((d) => WEEKDAY_NAMES_EN[d]).join(', ') : 'Select days below'})
               </span>
             </div>
             <div className="flex items-center gap-1">
-              {WEEKDAY_SHORT_HEB.map((hebName, dIdx) => {
+              {WEEKDAY_NAMES_EN.map((enName, dIdx) => {
                 const isSel = newEventDays.includes(dIdx);
                 return (
                   <button
@@ -1998,9 +2124,9 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                         ? 'bg-pink-600 text-white shadow-xs scale-105'
                         : 'bg-white text-stone-600 border border-pink-200 hover:bg-pink-100'
                     }`}
-                    title={WEEKDAY_FULL_HEB[dIdx]}
+                    title={enName}
                   >
-                    {hebName}
+                    {enName.charAt(0)}
                   </button>
                 );
               })}
@@ -2011,83 +2137,98 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                 onClick={() => setNewEventDays([0, 2, 4])}
                 className="px-2 py-0.5 rounded-md bg-white border border-pink-200 text-pink-800 hover:bg-pink-100 font-medium cursor-pointer"
               >
-                א׳, ג׳, ה׳ (אימונים)
+                Sun, Tue, Thu
               </button>
               <button
                 type="button"
                 onClick={() => setNewEventDays([1, 3])}
                 className="px-2 py-0.5 rounded-md bg-white border border-pink-200 text-pink-800 hover:bg-pink-100 font-medium cursor-pointer"
               >
-                ב׳, ד׳
+                Mon, Wed
               </button>
               <button
                 type="button"
                 onClick={() => setNewEventDays([0, 1, 2, 3, 4])}
                 className="px-2 py-0.5 rounded-md bg-white border border-pink-200 text-pink-800 hover:bg-pink-100 font-medium cursor-pointer"
               >
-                ימי חול
+                Weekdays
               </button>
             </div>
           </div>
         )}
 
-        {/* Quick Routine Chips (Fitness, Pilates, Walking, Classes) */}
+        {/* Quick Routine & Multi-Day Chips - 100% English */}
         <div className="mt-2.5 pt-2 border-t border-pink-100/70 flex items-center gap-1.5 flex-wrap text-xs">
           <span className="text-[10px] text-pink-600 font-semibold flex items-center gap-1 shrink-0">
             <span>⚡</span>
-            <span>קיצור לשגרה קבועה:</span>
+            <span>Quick Templates:</span>
           </span>
           <button
             type="button"
             onClick={() => {
+              setSelectedEventIcon('✈️');
+              setNewEventText('Trip / Vacation');
+              setNewEventRecurrence('date-range');
+              const d = parseDateKey(selectedDate);
+              d.setDate(d.getDate() + 2);
+              setNewEventEndDate(formatDateKey(d));
+            }}
+            className="px-2 py-1 rounded-xl bg-white hover:bg-indigo-50 text-indigo-950 border border-indigo-200 flex items-center gap-1 cursor-pointer transition shadow-2xs hover:scale-102 text-[11px]"
+            title="Schedule a 3-day trip across consecutive dates"
+          >
+            <span>✈️ 3-Day Trip (Multi-Day)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
               setSelectedEventIcon('🏋️‍♀️');
-              setNewEventText('אימון כושר');
+              setNewEventText('Fitness Workout');
               setNewEventRecurrence('weekly-custom');
               setNewEventDays([0, 2, 4]); // Sun, Tue, Thu
             }}
             className="px-2 py-1 rounded-xl bg-white hover:bg-pink-100 text-pink-900 border border-pink-200 flex items-center gap-1 cursor-pointer transition shadow-2xs hover:scale-102 text-[11px]"
-            title="קבע אימון כושר קבוע בימי ראשון, שלישי וחמישי"
+            title="Schedule fitness workouts on Sunday, Tuesday and Thursday"
           >
-            <span>🏋️‍♀️ אימון כושר (א׳, ג׳, ה׳)</span>
+            <span>🏋️‍♀️ Workout (Sun, Tue, Thu)</span>
           </button>
           <button
             type="button"
             onClick={() => {
               setSelectedEventIcon('🧘‍♀️');
-              setNewEventText('פילאטיס / יוגה');
+              setNewEventText('Pilates / Yoga');
               setNewEventRecurrence('weekly-custom');
               setNewEventDays([1, 3]); // Mon, Wed
             }}
             className="px-2 py-1 rounded-xl bg-white hover:bg-pink-100 text-pink-900 border border-pink-200 flex items-center gap-1 cursor-pointer transition shadow-2xs hover:scale-102 text-[11px]"
-            title="קבע פילאטיס או יוגה בימי שני ורביעי"
+            title="Schedule Pilates or Yoga on Monday and Wednesday"
           >
-            <span>🧘‍♀️ פילאטיס / יוגה (ב׳, ד׳)</span>
+            <span>🧘‍♀️ Pilates & Yoga (Mon, Wed)</span>
           </button>
           <button
             type="button"
             onClick={() => {
               setSelectedEventIcon('🏃‍♀️');
-              setNewEventText('הליכה / ריצה');
+              setNewEventText('Walk & Run');
               setNewEventRecurrence('weekly-custom');
               setNewEventDays([0, 2, 4, 5]); // Sun, Tue, Thu, Fri
             }}
             className="px-2 py-1 rounded-xl bg-white hover:bg-pink-100 text-pink-900 border border-pink-200 flex items-center gap-1 cursor-pointer transition shadow-2xs hover:scale-102 text-[11px]"
-            title="קבע הליכה או ריצה 4 פעמים בשבוע"
+            title="Schedule walking or running 4 days a week"
           >
-            <span>🏃‍♀️ הליכה / ריצה (4 ימים)</span>
+            <span>🏃‍♀️ Walk & Run (4 Days)</span>
           </button>
           <button
             type="button"
             onClick={() => {
               setSelectedEventIcon('📚');
-              setNewEventText('חוג / לימודים');
+              setNewEventText('Weekly Class');
               setNewEventRecurrence('weekly');
               setNewEventDays([parseDateKey(selectedDate).getDay()]);
             }}
             className="px-2 py-1 rounded-xl bg-white hover:bg-pink-100 text-pink-900 border border-pink-200 flex items-center gap-1 cursor-pointer transition shadow-2xs hover:scale-102 text-[11px]"
-            title="קבע חוג או שיעור קבוע ביום זה בכל שבוע"
+            title="Schedule a weekly class on this day"
           >
-            <span>📚 חוג / לימודים (שבועי)</span>
+            <span>📚 Weekly Class</span>
           </button>
         </div>
       </div>
@@ -2450,17 +2591,18 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
 
             <div className="grid grid-cols-3 gap-2 text-center">
               {MOODS.map((m) => {
-                const isSelected = currentMood === m.type;
+                const isSelected = currentMoods.includes(m.type);
                 return (
                   <button
                     key={m.type}
                     type="button"
-                    onClick={() => onUpdateDayLog(selectedDate, { mood: m.type })}
+                    onClick={() => handleToggleDayMood(m.type)}
                     className={`py-2 px-1.5 rounded-xl flex flex-col items-center justify-center gap-1 border transition-all cursor-pointer ${
                       isSelected
                         ? 'bg-pink-100 border-pink-400 ring-2 ring-pink-300 shadow-2xs font-bold scale-[1.02]'
                         : 'bg-pink-50/25 hover:bg-pink-50/80 border-pink-100 text-pink-900 opacity-75 hover:opacity-100'
                     }`}
+                    title={isSelected ? `Click to deselect ${m.label}` : `Select ${m.label}`}
                   >
                     <span className="text-xl select-none leading-none">{m.emoji}</span>
                     <span className="text-[10.5px] font-semibold text-pink-950 leading-tight">{m.label}</span>
@@ -3183,204 +3325,29 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
       </div>
 
       {/* ========================================================
-          MIDDAY PULSE & MOOD PIVOT (Check-in midway through the day)
+          DAILY JOKES, IDIOMS & WITTICISMS (Compact & proportional)
          ======================================================== */}
-      <div className="mt-4 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-[#fff4f8] via-[#fffbfd] to-[#f5f8ff] border border-pink-200/90 shadow-2xs relative">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 mb-3 border-b border-pink-100">
-          <div className="flex items-center gap-2">
-            <span className="text-xl select-none">☀️</span>
-            <div>
-              <h3 className="text-xs sm:text-sm font-serif font-bold text-pink-950 uppercase tracking-wider flex items-center gap-1.5">
-                <span>Midday Pulse & Mood Pivot</span>
-                {middayCheckIn?.completed && (
-                  <span className="text-[10px] font-sans font-medium text-emerald-700 bg-emerald-100/90 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
-                    <Check className="w-2.5 h-2.5" /> Checked In
-                  </span>
-                )}
-              </h3>
-              <p className="text-[11px] text-pink-600 font-script">
-                Pause at noon • How are you feeling right now? Any cravings, mood shifts, or spontaneous wishes? ♡
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-1.5 self-start sm:self-auto">
-            {middayCheckIn?.completed && !isEditingMidday && (
-              <button
-                type="button"
-                onClick={() => setIsEditingMidday(true)}
-                className="px-2.5 py-1 text-xs text-pink-700 hover:text-pink-950 bg-white rounded-xl border border-pink-200 shadow-2xs flex items-center gap-1 cursor-pointer transition"
-              >
-                <Pencil className="w-3 h-3 text-pink-500" />
-                <span>Update Midday Pulse</span>
-              </button>
-            )}
-          </div>
-        </div>
-
-        {isEditingMidday ? (
-          <form onSubmit={handleSaveMiddayPulse} className="space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-              {/* Question 1: How are you feeling now / Mood Shift */}
-              <div className="p-3 bg-white/90 rounded-xl border border-pink-100 space-y-1.5">
-                <label className="block text-[11px] font-bold text-pink-900 flex items-center gap-1">
-                  <span>💭</span>
-                  <span>How's your mood & energy now?</span>
-                </label>
-                <input
-                  type="text"
-                  value={middayMoodShift}
-                  onChange={(e) => setMiddayMoodShift(e.target.value)}
-                  placeholder="e.g. energized, a bit drowsy, calm, feeling productive..."
-                  className="w-full p-2 text-xs bg-pink-50/30 rounded-lg border border-pink-200 focus:bg-white focus:outline-none focus:ring-1 focus:ring-pink-400 text-pink-950 placeholder:text-pink-300"
-                />
-                <div className="flex flex-wrap gap-1 pt-1">
-                  {['Peaceful ✨', 'Need a break ☕', 'Second wind ⚡', 'Happy 💖', 'Sleepy 🥱'].map((chip) => (
-                    <button
-                      key={chip}
-                      type="button"
-                      onClick={() => setMiddayMoodShift(chip)}
-                      className="text-[9px] px-2 py-0.5 rounded-full bg-pink-50 hover:bg-pink-100 text-pink-800 border border-pink-200/60 cursor-pointer"
-                    >
-                      {chip}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Question 2: Cravings & Spontaneous Desires */}
-              <div className="p-3 bg-white/90 rounded-xl border border-pink-100 space-y-1.5">
-                <label className="block text-[11px] font-bold text-pink-900 flex items-center gap-1">
-                  <span>🍫</span>
-                  <span>Craving or desire right now?</span>
-                </label>
-                <input
-                  type="text"
-                  value={middayCraving}
-                  onChange={(e) => setMiddayCraving(e.target.value)}
-                  placeholder="e.g. an iced latte, fresh air walk, chocolate, a quiet hug..."
-                  className="w-full p-2 text-xs bg-pink-50/30 rounded-lg border border-pink-200 focus:bg-white focus:outline-none focus:ring-1 focus:ring-pink-400 text-pink-950 placeholder:text-pink-300"
-                />
-                <div className="flex flex-wrap gap-1 pt-1">
-                  {['Walk outside 🌿', 'Iced Matcha 🍵', 'Sweet treat 🍪', '10m Stretch 🧘‍♀️'].map((chip) => (
-                    <button
-                      key={chip}
-                      type="button"
-                      onClick={() => setMiddayCraving(chip)}
-                      className="text-[9px] px-2 py-0.5 rounded-full bg-pink-50 hover:bg-pink-100 text-pink-800 border border-pink-200/60 cursor-pointer"
-                    >
-                      {chip}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Question 3: Afternoon Intention */}
-              <div className="p-3 bg-white/90 rounded-xl border border-pink-100 space-y-1.5">
-                <label className="block text-[11px] font-bold text-pink-900 flex items-center gap-1">
-                  <span>🎯</span>
-                  <span>Gentle focus for this afternoon:</span>
-                </label>
-                <input
-                  type="text"
-                  value={middayIntention}
-                  onChange={(e) => setMiddayIntention(e.target.value)}
-                  placeholder="e.g. finish project draft, gentle self-care evening..."
-                  className="w-full p-2 text-xs bg-pink-50/30 rounded-lg border border-pink-200 focus:bg-white focus:outline-none focus:ring-1 focus:ring-pink-400 text-pink-950 placeholder:text-pink-300"
-                />
-                <div className="flex flex-wrap gap-1 pt-1">
-                  {['Deep focus sprint ⏳', 'Wrap up early 🌸', 'Gentle pace 🕊️'].map((chip) => (
-                    <button
-                      key={chip}
-                      type="button"
-                      onClick={() => setMiddayIntention(chip)}
-                      className="text-[9px] px-2 py-0.5 rounded-full bg-pink-50 hover:bg-pink-100 text-pink-800 border border-pink-200/60 cursor-pointer"
-                    >
-                      {chip}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-1">
-              {middayCheckIn?.completed && (
-                <button
-                  type="button"
-                  onClick={() => setIsEditingMidday(false)}
-                  className="px-3 py-1.5 text-xs text-pink-700 hover:bg-pink-50 rounded-xl cursor-pointer"
-                >
-                  Cancel
-                </button>
+      <div className="mt-3.5 p-2.5 sm:p-3 rounded-2xl bg-[#fffbfc] border border-amber-200/70 shadow-2xs relative">
+        <div className="flex items-center justify-between gap-2 pb-2 mb-2 border-b border-amber-100/80">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="text-base select-none">🃏</span>
+            <h3 className="text-xs font-serif font-bold text-amber-950 uppercase tracking-wider flex items-center gap-1.5 truncate">
+              <span>Jokes, Idioms & Catchy Phrases</span>
+              {witItems.length > 0 && (
+                <span className="text-[9.5px] font-sans font-medium text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded-full border border-amber-200">
+                  {witItems.length}
+                </span>
               )}
-              <button
-                type="submit"
-                className="px-4 py-1.5 text-xs font-semibold bg-pink-500 hover:bg-pink-600 text-white rounded-xl shadow-2xs cursor-pointer flex items-center gap-1.5"
-              >
-                <Check className="w-3.5 h-3.5" />
-                <span>Save Midday Pulse</span>
-              </button>
-            </div>
-          </form>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-            <div className="p-3 bg-white/80 rounded-xl border border-pink-100/90 shadow-2xs">
-              <span className="text-[10px] font-bold text-pink-500 uppercase tracking-wider block mb-0.5">
-                Current State & Mood
-              </span>
-              <p className="text-xs font-semibold text-pink-950">
-                {middayCheckIn?.moodShift || 'Peaceful'}
-              </p>
-            </div>
-            <div className="p-3 bg-white/80 rounded-xl border border-pink-100/90 shadow-2xs">
-              <span className="text-[10px] font-bold text-pink-500 uppercase tracking-wider block mb-0.5">
-                Craving / Wish
-              </span>
-              <p className="text-xs font-medium text-pink-900">
-                {middayCheckIn?.cravingOrDesire || '—'}
-              </p>
-            </div>
-            <div className="p-3 bg-white/80 rounded-xl border border-pink-100/90 shadow-2xs">
-              <span className="text-[10px] font-bold text-pink-500 uppercase tracking-wider block mb-0.5">
-                Afternoon Intention
-              </span>
-              <p className="text-xs font-medium text-pink-900">
-                {middayCheckIn?.afternoonIntention || '—'}
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* ========================================================
-          DAILY JOKES, IDIOMS & WITTICISMS (Save multiple items per day!)
-         ======================================================== */}
-      <div className="mt-4 p-3.5 sm:p-4 rounded-2xl bg-[#fffbfc] border border-amber-200/80 shadow-2xs relative">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 mb-3 border-b border-amber-100">
-          <div className="flex items-center gap-2">
-            <span className="text-xl select-none">🃏</span>
-            <div>
-              <h3 className="text-xs sm:text-sm font-serif font-bold text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
-                <span>Today's Jokes, Idioms & Catchy Phrases</span>
-                {witItems.length > 0 && (
-                  <span className="text-[10px] font-sans font-medium text-amber-800 bg-amber-100/90 px-2 py-0.5 rounded-full border border-amber-200">
-                    {witItems.length}
-                  </span>
-                )}
-              </h3>
-              <p className="text-[11px] text-amber-700/80 font-script">
-                Found a joke you loved or an idiom you learned today? Save it here! (Add as many as you like) ♡
-              </p>
-            </div>
+            </h3>
           </div>
 
-          <div className="flex items-center gap-2 self-start sm:self-auto">
+          <div className="flex items-center gap-1.5 shrink-0">
             {onOpenJokesDigest && (
               <button
                 type="button"
                 onClick={onOpenJokesDigest}
-                className="px-3 py-1 text-xs bg-amber-100/80 hover:bg-amber-200/80 text-amber-900 rounded-xl font-medium border border-amber-200/80 shadow-2xs transition flex items-center gap-1 cursor-pointer"
-                title="View Monthly & Annual Gems, Quotes & Wisdom Treasury"
+                className="px-2.5 py-1 text-[11px] bg-amber-100/80 hover:bg-amber-200/80 text-amber-900 rounded-lg font-medium border border-amber-200/80 shadow-2xs transition flex items-center gap-1 cursor-pointer"
+                title="View Gems Treasury"
               >
                 <span>💎</span>
                 <span>Gems</span>
@@ -3395,45 +3362,46 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                 setWitPunchline('');
                 setIsAddingWit(true);
               }}
-              className="px-3 py-1 text-xs bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-semibold shadow-2xs transition flex items-center gap-1 cursor-pointer"
+              className="px-2.5 py-1 text-[11px] bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-semibold shadow-2xs transition flex items-center gap-1 cursor-pointer"
             >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Add Joke / Phrase</span>
+              <Plus className="w-3 h-3" />
+              <span>Add</span>
             </button>
           </div>
         </div>
 
         {/* Existing Wit Items */}
         {witItems.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-1">
             {witItems.map((item) => (
               <div
                 key={item.id}
-                className="p-3 bg-white rounded-xl border border-amber-200/80 shadow-2xs relative group hover:border-amber-300 transition"
+                className="p-2.5 bg-white rounded-xl border border-amber-200/80 shadow-2xs relative hover:border-amber-300 transition"
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-1.5 mb-1">
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <div className="flex items-center gap-1">
                     <span className="text-xs">
                       {item.type === 'joke' ? '😂' : item.type === 'idiom' ? '💡' : item.type === 'quote' ? '📜' : '✨'}
                     </span>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200/60">
+                    <span className="text-[9.5px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded-full border border-amber-200/60">
                       {item.type}
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                  <div className="flex items-center gap-1">
                     <button
                       type="button"
                       onClick={() => handleStartEditWit(item)}
-                      className="p-1 text-stone-400 hover:text-amber-600 rounded cursor-pointer"
-                      title="Edit"
+                      className="px-1.5 py-0.5 text-stone-600 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 rounded border border-amber-200 transition cursor-pointer flex items-center gap-1 text-[9.5px] font-medium shadow-2xs"
+                      title="Edit this entry"
                     >
-                      <Pencil className="w-3 h-3" />
+                      <Pencil className="w-2.5 h-2.5 text-amber-600" />
+                      <span>Edit</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => handleDeleteWit(item.id)}
-                      className="p-1 text-stone-400 hover:text-rose-500 rounded cursor-pointer"
+                      className="p-1 text-stone-400 hover:text-rose-500 rounded cursor-pointer transition"
                       title="Delete"
                     >
                       <Trash2 className="w-3 h-3" />
@@ -3441,30 +3409,29 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                   </div>
                 </div>
 
-                <p className="text-xs font-semibold text-stone-900 leading-snug">
-                  "{item.text}"
+                <p dir="auto" className="text-xs font-semibold text-stone-900 leading-relaxed text-start">
+                  {item.text}
+                  {item.meaningOrPunchline ? (
+                    <span className="font-normal font-script text-amber-800 ml-1.5">
+                      — {item.meaningOrPunchline}
+                    </span>
+                  ) : null}
                 </p>
-
-                {item.meaningOrPunchline && (
-                  <p className="text-xs font-script text-amber-800 mt-1 italic leading-snug">
-                    ↳ {item.meaningOrPunchline}
-                  </p>
-                )}
               </div>
             ))}
           </div>
         ) : (
-          <div className="mb-3 py-3 px-3 rounded-xl bg-amber-50/40 border border-dashed border-amber-200 text-center text-xs text-amber-700/80">
-            No jokes or idioms saved yet for today. Heard something funny or clever? Jot it down!
+          <div className="mb-1 py-2 px-3 rounded-xl bg-amber-50/30 border border-dashed border-amber-200/70 text-center text-[11px] text-amber-700/80">
+            No jokes, idioms or quotes saved yet for today. Heard something clever? Click "+ Add" above!
           </div>
         )}
 
         {/* Add/Edit Form Modal/Inline */}
         {isAddingWit && (
-          <form onSubmit={handleSaveWit} className="p-3 bg-white rounded-2xl border-2 border-amber-300 space-y-2.5 animate-in fade-in mb-3">
-            <div className="flex items-center justify-between border-b border-amber-100 pb-1.5">
-              <span className="text-xs font-bold text-amber-950">
-                {editingWitId ? 'Edit Entry' : 'Add New Joke, Idiom or Phrase'}
+          <form onSubmit={handleSaveWit} className="p-2.5 bg-white rounded-xl border-2 border-amber-300 space-y-2 animate-in fade-in my-2">
+            <div className="flex items-center justify-between border-b border-amber-100 pb-1">
+              <span className="text-[11px] font-bold text-amber-950">
+                {editingWitId ? 'Edit Entry' : 'Add Joke, Idiom or Phrase'}
               </span>
               <button
                 type="button"
@@ -3478,14 +3445,13 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
               </button>
             </div>
 
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[11px] font-medium text-stone-600 mr-1">Type:</span>
+            <div className="flex flex-wrap items-center gap-1">
               {(['joke', 'idiom', 'quote', 'witticism'] as const).map((t) => (
                 <button
                   key={t}
                   type="button"
                   onClick={() => setWitType(t)}
-                  className={`text-xs px-2.5 py-1 rounded-full border transition cursor-pointer capitalize ${
+                  className={`text-[10.5px] px-2 py-0.5 rounded-full border transition cursor-pointer capitalize ${
                     witType === t
                       ? 'bg-amber-100 border-amber-400 text-amber-950 font-bold'
                       : 'bg-stone-50 border-stone-200 text-stone-600'
@@ -3496,27 +3462,29 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
               ))}
             </div>
 
-            <div className="space-y-1.5">
-              <input
-                type="text"
+            <div>
+              <textarea
+                rows={1}
+                dir="auto"
                 value={witText}
-                onChange={(e) => setWitText(e.target.value)}
+                onChange={(e) => {
+                  setWitText(e.target.value);
+                  e.target.style.height = 'auto';
+                  e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+                }}
                 placeholder={
                   witType === 'joke'
-                    ? "The joke... 😂 (כתבו כאן את הבדיחה)"
-                    : "The phrase, quote or idiom..."
+                    ? "Write your joke here... 😂"
+                    : witType === 'idiom'
+                    ? "Write the idiom or phrase and its meaning... 💡"
+                    : witType === 'quote'
+                    ? "Write the quote and who said it... 📜"
+                    : "Write the witty remark or phrase... ✨"
                 }
-                className="w-full p-2 text-xs bg-amber-50/20 rounded-xl border border-amber-200 focus:bg-white focus:outline-none focus:ring-1 focus:ring-amber-400 text-stone-900"
+                className="w-full p-2 text-xs bg-amber-50/20 rounded-xl border border-amber-200 focus:bg-white focus:outline-none focus:ring-1 focus:ring-amber-400 text-stone-900 text-start resize-none min-h-[34px] leading-relaxed"
+                autoFocus
+                required
               />
-              {witType !== 'joke' && (
-                <input
-                  type="text"
-                  value={witPunchline}
-                  onChange={(e) => setWitPunchline(e.target.value)}
-                  placeholder="Meaning, explanation, or author (optional)..."
-                  className="w-full p-2 text-xs bg-amber-50/20 rounded-xl border border-amber-200 focus:bg-white focus:outline-none focus:ring-1 focus:ring-amber-400 text-stone-900"
-                />
-              )}
             </div>
 
             <div className="flex justify-between items-center pt-1">

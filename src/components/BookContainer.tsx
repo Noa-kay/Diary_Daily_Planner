@@ -13,7 +13,8 @@ import {
   BellOff,
   Smile,
   LifeBuoy,
-  Settings
+  Settings,
+  Cookie
 } from 'lucide-react';
 import { BookView, AppTheme, AppSettings } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
@@ -148,14 +149,14 @@ export const BookContainer: React.FC<BookContainerProps> = ({
             },
             {
               id: 'ideas' as BookView,
-              title: 'Sparks & Vision Studio ✨',
-              shortTitle: 'Sparks ✨',
-              icon: <Lightbulb className="w-3.5 h-3.5 text-amber-500" />,
+              title: 'Daily Boost & Fortune',
+              shortTitle: 'Fortune',
+              icon: <Cookie className="w-3.5 h-3.5 text-amber-600" />,
             },
             {
               id: 'jokes-digest' as BookView,
-              title: 'Daily Gems & Wisdom 💎',
-              shortTitle: 'Gems 💎',
+              title: 'Daily Gems & Wisdom',
+              shortTitle: 'Gems',
               icon: <Sparkles className="w-3.5 h-3.5 text-amber-500" />,
             },
             ...(settings.enableCycleTracker
