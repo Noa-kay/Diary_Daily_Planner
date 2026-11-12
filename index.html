@@ -23,8 +23,8 @@
   <body class="bg-[#fdf3f5] text-stone-900 antialiased selection:bg-pink-200 selection:text-pink-900 font-sans">
     <div id="root"></div>
     <script>
-      // Clear development service worker only if explicitly requested via ?reset-sw
-      if (window.location.search.includes('reset-sw') && 'serviceWorker' in navigator) {
+      // Clear development service worker only if explicitly requested or if script fails
+      if ('serviceWorker' in navigator && (window.location.search.includes('reset-sw') || window.location.search.includes('recover'))) {
         navigator.serviceWorker.getRegistrations().then(function(registrations) {
           for (var reg of registrations) {
             reg.unregister();
@@ -38,6 +38,11 @@
       }
     </script>
     <script type="module" src="/src/main.tsx"></script>
+    <noscript>
+      <div style="padding: 20px; font-family: sans-serif; text-align: center;">
+        Please enable JavaScript to view your personal diary.
+      </div>
+    </noscript>
   </body>
 </html>
 

@@ -12,24 +12,24 @@ try {
   const html = fs.readFileSync(indexHtmlPath, 'utf8');
 
   // Find css file
-  const cssMatch = html.match(/href="(\/assets\/[^"]+\.css)"/);
+  const cssMatch = html.match(/href="(\.?\/assets\/[^"]+\.css)"/);
   // Find js file
-  const jsMatch = html.match(/src="(\/assets\/[^"]+\.js)"/);
+  const jsMatch = html.match(/src="(\.?\/assets\/[^"]+\.js)"/);
 
   if (!cssMatch || !jsMatch) {
     console.warn('Could not locate css or js assets in dist/index.html');
     process.exit(0);
   }
 
-  const cssPath = path.join(distDir, cssMatch[1]);
-  const jsPath = path.join(distDir, jsMatch[1]);
+  const cssPath = path.join(distDir, cssMatch[1].replace(/^\.?\//, ''));
+  const jsPath = path.join(distDir, jsMatch[1].replace(/^\.?\//, ''));
 
   const css = fs.readFileSync(cssPath, 'utf8');
   const js = fs.readFileSync(jsPath, 'utf8');
 
   let single = html
-    .replace(/<link rel="stylesheet"[^>]+href="\/assets\/[^"]+\.css"[^>]*>/, `<style>\n${css}\n</style>`)
-    .replace(/<script type="module"[^>]+src="\/assets\/[^"]+\.js"[^>]*><\/script>/, `<script>\n${js}\n</script>`)
+    .replace(/<link rel="stylesheet"[^>]+href="\.?\/assets\/[^"]+\.css"[^>]*>/, `<style>\n${css}\n</style>`)
+    .replace(/<script type="module"[^>]+src="\.?\/assets\/[^"]+\.js"[^>]*><\/script>/, `<script>\n${js}\n</script>`)
     .replace(/<link rel="manifest"[^>]*>/, '')
     .replace(/<script id="vite-plugin-pwa:register-sw"[^>]*><\/script>/, '');
 
