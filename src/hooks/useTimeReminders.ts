@@ -100,18 +100,24 @@ export function useTimeReminders(
         }
       }
 
-      // 2. Check today's important events with times (e.g. "Dentist 14:00 🦷")
+      // 2. Check today's important events with times (explicit @@time tag or time in title)
       const todayEvents = getEventStringsForDate(todayKey, dayLogs);
       for (let i = 0; i < todayEvents.length; i++) {
         const evt = todayEvents[i];
-        const mins = extractTimeInMinutes(evt);
+        const parsed = parseEventItem(evt);
+        if (parsed.eventTime && parsed.reminderEnabled === false) continue;
+
+        const mins = parsed.eventTime
+          ? extractTimeInMinutes(parsed.eventTime)
+          : extractTimeInMinutes(parsed.title);
+
         if (mins !== null) {
-          const parsed = parseEventItem(evt);
+          const timeLabel = parsed.eventTime || `${Math.floor(mins / 60)}:${String(mins % 60).padStart(2, '0')}`;
           candidateReminders.push({
-            baseId: `event-${todayKey}-${i}`,
+            baseId: `event-${todayKey}-${parsed.title}-${timeLabel}`,
             title: `${parsed.icon} ${parsed.title}`,
             targetMinutes: mins,
-            timeLabel: `${Math.floor(mins / 60)}:${String(mins % 60).padStart(2, '0')}`,
+            timeLabel,
           });
         }
       }
@@ -200,8 +206,11 @@ export function useTimeReminders(
             // Trigger desktop notification if supported and granted
             if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
               try {
+                const bodyText = item.baseId.startsWith('habit-')
+                  ? `${stageLabel} (${item.timeLabel}) • Practice now to keep your daily streak alive! ♡`
+                  : `${stageLabel} (${item.timeLabel}) • Scheduled event reminder ♡`;
                 new Notification(item.title, {
-                  body: `${stageLabel} (${item.timeLabel}) • Practice now to keep your daily streak alive! ♡`,
+                  body: bodyText,
                   icon: '/icon.svg',
                 });
               } catch (e) {

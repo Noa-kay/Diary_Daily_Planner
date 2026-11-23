@@ -154,18 +154,25 @@ export interface MiddayCheckIn {
   completed: boolean;
 }
 
+export interface CustomMoodItem {
+  emoji: string;
+  label?: string;
+}
+
 export interface DayLog {
   date: string; // YYYY-MM-DD
   gratitude?: string;
   topPriorities?: [string, string, string];
   dailyNote?: string;
   dailyThoughts?: string;
+  journalEntryNote?: string; // Optional reason/status if day's story was skipped or written briefly
   dailyAffirmation?: string;
   importantEvents?: string[]; // Events that show on the monthly calendar square
   witItems?: DailyWitItem[]; // Jokes, idioms and catchy phrases of the day
   middayCheckIn?: MiddayCheckIn; // Midday pulse, mood change, and cravings
   mood?: MoodType;
   moods?: MoodType[]; // Multiple mood selections for the day
+  customMoods?: CustomMoodItem[]; // Custom user-added mood emojis for the day
   energyLevel?: number; // 1 to 5 stars/hearts
   meals?: {
     breakfast?: string;
@@ -197,6 +204,7 @@ export interface AppSettings {
   userDisplayName?: string;
   soundAlertsEnabled?: boolean; // Gentle chime reminder when events/tasks approach
   monthlyNotes?: Record<string, string>; // YYYY-MM -> monthly goals
+  savedCustomMoods?: CustomMoodItem[]; // Permanently saved custom mood emojis & labels
 }
 
 export interface JournalDatabase {

@@ -166,6 +166,8 @@ export function scoreUserData(db: JournalDatabase | null | undefined): number {
       const log = db.dayLogs[dateKey];
       if (log) {
         if (log.dailyNote || log.dailyThoughts) score += 15;
+        if (log.journalEntryNote) score += 5;
+        if (log.customMoods && log.customMoods.length > 0) score += 5;
         if (log.gratitude && !log.gratitude.includes('peaceful start to the day')) score += 10;
         if (log.importantEvents && log.importantEvents.length > 0) score += 10 * log.importantEvents.length;
         if (log.witItems && log.witItems.length > 0) score += 10 * log.witItems.length;
@@ -191,6 +193,9 @@ export function scoreUserData(db: JournalDatabase | null | undefined): number {
       score += 5;
     }
     if (db.settings.userDisplayName && db.settings.userDisplayName !== 'My Planner') {
+      score += 5;
+    }
+    if (db.settings.savedCustomMoods && db.settings.savedCustomMoods.length > 0) {
       score += 5;
     }
   }
@@ -384,6 +389,8 @@ export interface ParsedEventItem {
   startDate?: string;
   endDate?: string;
   originalDate?: string;
+  eventTime?: string; // e.g. "18:00"
+  reminderEnabled?: boolean; // true if alert chime is active for eventTime
   raw: string;
 }
 
@@ -393,9 +400,21 @@ export function formatEventItem(
   recurrence: EventRecurrence = 'none',
   originalDate?: string,
   repeatDays?: number[],
-  endDate?: string
+  endDate?: string,
+  eventTime?: string,
+  reminderEnabled: boolean = true
 ): string {
-  const cleanTitle = title.replace(/\s*@@repeat:[^\s]+/g, '').trim();
+  const cleanTitle = title
+    .replace(/\s*@@repeat:[^\s]+/g, '')
+    .replace(/\s*@@time:[^\s]+/g, '')
+    .trim();
+
+  const parts = [`${icon} ${cleanTitle}`];
+
+  if (eventTime && eventTime.trim()) {
+    parts.push(`@@time:${eventTime.trim()}${reminderEnabled === false ? ':silent' : ''}`);
+  }
+
   if (recurrence && recurrence !== 'none') {
     let specSuffix = '';
     if (recurrence === 'weekly-custom' && repeatDays && repeatDays.length > 0) {
@@ -404,12 +423,13 @@ export function formatEventItem(
       specSuffix = `:${endDate}`;
     }
     const dateSuffix = originalDate ? `@${originalDate}` : '';
-    return `${icon} ${cleanTitle} @@repeat:${recurrence}${specSuffix}${dateSuffix}`;
+    parts.push(`@@repeat:${recurrence}${specSuffix}${dateSuffix}`);
   }
-  return `${icon} ${cleanTitle}`;
+
+  return parts.join(' ');
 }
 
-// Helper to extract event icon, clean title and recurrence from raw event string
+// Helper to extract event icon, clean title, time and recurrence from raw event string
 export function parseEventItem(raw: string): ParsedEventItem {
   if (!raw) return { icon: '✦', title: '', recurrence: 'none', raw: '' };
 
@@ -419,11 +439,13 @@ export function parseEventItem(raw: string): ParsedEventItem {
   let originalDate: string | undefined = undefined;
   let startDate: string | undefined = undefined;
   let endDate: string | undefined = undefined;
+  let eventTime: string | undefined = undefined;
+  let reminderEnabled: boolean | undefined = undefined;
 
   // Extract recurrence tag if present: e.g. @@repeat:weekly-custom:0,2,4@2026-10-12 or @@repeat:date-range:2026-11-02@2026-10-29
-  const repeatRegex = /\s*@@repeat:([a-zA-Z0-9-]+)(?::([0-9,-]+))?(?:@(\d{4}-\d{2}-\d{2}))?$/;
+  const repeatRegex = /\s*@@repeat:([a-zA-Z0-9-]+)(?::([0-9,-]+))?(?:@(\d{4}-\d{2}-\d{2}))?/;
   const repeatMatch = working.match(repeatRegex);
-  if (repeatMatch) {
+  if (repeatMatch && repeatMatch.index !== undefined) {
     recurrence = repeatMatch[1] as EventRecurrence;
     if (recurrence === 'date-range') {
       endDate = repeatMatch[2];
@@ -432,7 +454,16 @@ export function parseEventItem(raw: string): ParsedEventItem {
       repeatDays = repeatMatch[2].split(',').map(Number).filter((n) => !isNaN(n));
     }
     originalDate = repeatMatch[3];
-    working = working.slice(0, repeatMatch.index).trim();
+    working = (working.slice(0, repeatMatch.index) + working.slice(repeatMatch.index + repeatMatch[0].length)).trim();
+  }
+
+  // Extract time tag if present: e.g. @@time:18:00 or @@time:18:00:silent
+  const timeTagRegex = /\s*@@time:(\d{1,2}:\d{2})(?::(silent|remind))?/;
+  const timeMatch = working.match(timeTagRegex);
+  if (timeMatch && timeMatch.index !== undefined) {
+    eventTime = timeMatch[1];
+    reminderEnabled = timeMatch[2] !== 'silent';
+    working = (working.slice(0, timeMatch.index) + working.slice(timeMatch.index + timeMatch[0].length)).trim();
   }
 
   // 1. Leading emoji: e.g. "🎂 Maya's Birthday" or "✈️ Flight"
@@ -441,7 +472,7 @@ export function parseEventItem(raw: string): ParsedEventItem {
   if (leadMatch) {
     const icon = leadMatch[1];
     const title = working.slice(leadMatch[0].length).trim();
-    return { icon, title: title || working, recurrence, repeatDays, startDate, endDate, originalDate, raw };
+    return { icon, title: title || working, recurrence, repeatDays, startDate, endDate, originalDate, eventTime, reminderEnabled, raw };
   }
 
   // 2. Trailing emoji: e.g. "Maya's Birthday 🎂" or "Dentist 14:00 🦷"
@@ -450,10 +481,10 @@ export function parseEventItem(raw: string): ParsedEventItem {
   if (trailMatch && trailMatch.index !== undefined) {
     const icon = trailMatch[1];
     const title = working.slice(0, trailMatch.index).trim();
-    return { icon, title: title || working, recurrence, repeatDays, startDate, endDate, originalDate, raw };
+    return { icon, title: title || working, recurrence, repeatDays, startDate, endDate, originalDate, eventTime, reminderEnabled, raw };
   }
 
-  return { icon: '✦', title: working, recurrence, repeatDays, startDate, endDate, originalDate, raw };
+  return { icon: '✦', title: working, recurrence, repeatDays, startDate, endDate, originalDate, eventTime, reminderEnabled, raw };
 }
 
 export interface DayEventItem {

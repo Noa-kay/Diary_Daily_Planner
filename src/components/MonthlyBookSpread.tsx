@@ -460,7 +460,7 @@ export const MonthlyBookSpread: React.FC<MonthlyBookSpreadProps> = ({
                         return (
                           <div
                             key={idx}
-                            title={`${parsed.title} (מטלה / שגרה קבועה)`}
+                            title={`${parsed.title} (Routine)`}
                             className="group/tag relative flex items-center gap-1 text-[8.5px] sm:text-[9px] px-1.5 py-0.5 rounded-md font-normal bg-stone-50/90 hover:bg-pink-50/70 text-stone-700 border border-dashed border-stone-300/80 shadow-2xs transition-all leading-tight break-words text-left w-full overflow-hidden"
                           >
                             <span className="w-1.5 h-1.5 rounded-full border border-pink-400 bg-pink-100 shrink-0" />
@@ -477,7 +477,7 @@ export const MonthlyBookSpread: React.FC<MonthlyBookSpreadProps> = ({
                       return (
                         <div
                           key={idx}
-                          title={evt}
+                          title={parsed.title}
                           className="group/tag relative flex items-start gap-1 text-[9px] sm:text-[9.5px] px-1.5 py-0.5 rounded-md font-medium bg-[#fff3f6] hover:bg-[#ffeaf0] text-pink-950 border-l-[3px] border-l-pink-400 border-y border-r border-pink-200/70 shadow-2xs transition-all leading-tight break-words text-left w-full overflow-hidden"
                         >
                           <span className="text-[10px] shrink-0 mt-0.5 select-none leading-none">
@@ -546,8 +546,9 @@ export const MonthlyBookSpread: React.FC<MonthlyBookSpreadProps> = ({
                         : log?.mood
                         ? [log.mood]
                         : [];
+                      const customMoodEmojis = (log?.customMoods || []).map((c) => c.emoji);
 
-                      if (moodsList.length === 0) return null;
+                      if (moodsList.length === 0 && customMoodEmojis.length === 0) return null;
 
                       const moodToEmoji = (m: string) => {
                         switch (m) {
@@ -561,10 +562,15 @@ export const MonthlyBookSpread: React.FC<MonthlyBookSpreadProps> = ({
                         }
                       };
 
+                      const combinedEmojis = [
+                        ...moodsList.map(moodToEmoji),
+                        ...customMoodEmojis,
+                      ];
+
                       return (
                         <div className="flex items-center gap-0.5 text-[11px] select-none leading-none" title="Mood(s) Today">
-                          {moodsList.slice(0, 3).map((m, idx) => (
-                            <span key={idx}>{moodToEmoji(m)}</span>
+                          {combinedEmojis.slice(0, 3).map((emoji, idx) => (
+                            <span key={idx}>{emoji}</span>
                           ))}
                         </div>
                       );

@@ -28,7 +28,8 @@ import {
   Volume2,
   ChevronsUpDown,
   ArrowRightLeft,
-  Bell
+  Bell,
+  BellOff
 } from 'lucide-react';
 import { 
   Task, 
@@ -40,6 +41,7 @@ import {
   FlowLevel, 
   CycleSymptom, 
   MoodType, 
+  CustomMoodItem,
   AppSettings,
   EventRecurrence,
   DailyWitItem,
@@ -115,6 +117,7 @@ interface DayBookPageProps {
   habits: Habit[];
   onUpdateHabits?: (habits: Habit[]) => void;
   settings: AppSettings;
+  onUpdateSettings?: (partial: Partial<AppSettings>) => void;
   onOpenJokesDigest?: () => void;
   onTransferDay?: (
     fromDate: string,
@@ -130,6 +133,23 @@ const MOODS: { type: MoodType; label: string; emoji: string }[] = [
   { type: 'tired', label: 'Tired', emoji: '🥱' },
   { type: 'stressed', label: 'Stressed', emoji: '🌧️' },
   { type: 'angry', label: 'Angry', emoji: '😠' },
+];
+
+const EXTRA_MOOD_EMOJIS = ['🥰', '🥳', '🥹', '😌', '😴', '🤒', '🤯', '🦋', '🌈', '☕', '💃', '🫠', '😎', '🤗', '🥺', '🙏', '💪', '🌸'];
+
+const JOURNAL_ENTRY_OPTIONS: { id: string; emoji: string; label: string }[] = [
+  { id: 'low-energy', emoji: '🪫', label: "Didn't have the energy to fill out today" },
+  { id: 'brief-highlights', emoji: '📝', label: 'Writing just a few brief parts today' },
+  { id: 'dont-remember', emoji: '🌫️', label: "Don't really remember everything from today" },
+  { id: 'what-i-remember', emoji: '💭', label: 'Writing only what I remember' },
+  { id: 'too-busy', emoji: '⏳', label: 'Too busy today — keeping the planner super short' },
+  { id: 'rest-day', emoji: '😴', label: 'Exhausted today — taking a complete rest day' },
+  { id: 'unplugged', emoji: '✨', label: 'Taking a break & unplugging from planning today' },
+  { id: 'hectic-day', emoji: '🌪️', label: 'Hectic day — skipping the details' },
+  { id: 'chill-day', emoji: '🏖️', label: 'Off-routine / chill day — nothing to schedule' },
+  { id: 'quiet-day', emoji: '🤍', label: 'Needed a quiet day without pressure' },
+  { id: 'late-summary', emoji: '🕰️', label: 'Catching up late — only noting the essentials' },
+  { id: 'in-my-head', emoji: '🧠', label: 'Kept my plans in my head today' },
 ];
 
 const FLOW_LEVELS: { id: FlowLevel; label: string; icon: string }[] = [
@@ -224,6 +244,7 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
   habits,
   onUpdateHabits,
   settings,
+  onUpdateSettings,
   onOpenJokesDigest,
   onTransferDay,
 }) => {
@@ -508,8 +529,11 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
   const [newEventRecurrence, setNewEventRecurrence] = useState<EventRecurrence>('none');
   const [newEventDays, setNewEventDays] = useState<number[]>(() => [parseDateKey(selectedDate).getDay()]);
   const [newEventEndDate, setNewEventEndDate] = useState<string>('');
+  const [newEventTime, setNewEventTime] = useState<string>('');
+  const [newEventRemind, setNewEventRemind] = useState<boolean>(true);
   const [isIconPickerOpen, setIsIconPickerOpen] = useState(false);
   const [isRecurrencePickerOpen, setIsRecurrencePickerOpen] = useState(false);
+  const [isTimePickerOpen, setIsTimePickerOpen] = useState(false);
   const [quickChangeIndex, setQuickChangeIndex] = useState<number | null>(null);
 
   // Update default day of week and default end date when selectedDate changes
@@ -545,6 +569,8 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
   const [editingEventRecurrence, setEditingEventRecurrence] = useState<EventRecurrence>('none');
   const [editingEventDays, setEditingEventDays] = useState<number[]>([]);
   const [editingEventEndDate, setEditingEventEndDate] = useState<string>('');
+  const [editingEventTime, setEditingEventTime] = useState<string>('');
+  const [editingEventRemind, setEditingEventRemind] = useState<boolean>(true);
   const [editingPickerOpen, setEditingPickerOpen] = useState(false);
   const [editingRecurrencePickerOpen, setEditingRecurrencePickerOpen] = useState(false);
 
@@ -562,17 +588,34 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
     const endDateToUse = recurrenceToUse === 'date-range'
       ? (newEventEndDate && newEventEndDate >= selectedDate ? newEventEndDate : selectedDate)
       : undefined;
+    const timeToUse = newEventTime.trim() || undefined;
+    const remindToUse = timeToUse ? newEventRemind : true;
 
-    const finalEvent = formatEventItem(iconToUse, titleToUse, recurrenceToUse, selectedDate, daysToUse, endDateToUse);
+    const finalEvent = formatEventItem(
+      iconToUse,
+      titleToUse,
+      recurrenceToUse,
+      selectedDate,
+      daysToUse,
+      endDateToUse,
+      timeToUse,
+      remindToUse
+    );
     const updated = [...importantEvents, finalEvent];
     onUpdateDayLog(selectedDate, { importantEvents: updated });
     setNewEventText('');
     setNewEventRecurrence('none');
     setNewEventDays([parseDateKey(selectedDate).getDay()]);
+    setNewEventTime('');
+    setNewEventRemind(true);
     setIsIconPickerOpen(false);
     setIsRecurrencePickerOpen(false);
+    setIsTimePickerOpen(false);
 
-    if (recurrenceToUse === 'date-range' && endDateToUse) {
+    if (timeToUse && remindToUse) {
+      setGcalStatusMsg(`🔔 Scheduled "${titleToUse}" with reminder at ${timeToUse}`);
+      setTimeout(() => setGcalStatusMsg(null), 4000);
+    } else if (recurrenceToUse === 'date-range' && endDateToUse) {
       setGcalStatusMsg(`🗓️ Multi-day event added from ${selectedDate} to ${endDateToUse} ✨`);
       setTimeout(() => setGcalStatusMsg(null), 4000);
     } else if (recurrenceToUse === 'weekly-custom' && daysToUse && daysToUse.length > 0) {
@@ -584,8 +627,10 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
     // Sync to Google Calendar or queue offline
     try {
       const syncRes = await syncEventAction('insert', selectedDate, finalEvent);
-      setGcalStatusMsg(syncRes.message);
-      setTimeout(() => setGcalStatusMsg(null), 3500);
+      if (syncRes.message) {
+        setGcalStatusMsg(syncRes.message);
+        setTimeout(() => setGcalStatusMsg(null), 3500);
+      }
     } catch (err) {
       console.warn('GCal sync error:', err);
     }
@@ -599,7 +644,9 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
       item.parsed.recurrence,
       targetDateForEdit,
       item.parsed.repeatDays,
-      item.parsed.endDate
+      item.parsed.endDate,
+      item.parsed.eventTime,
+      item.parsed.reminderEnabled
     );
     const sourceLogEvents =
       (allDayLogs && allDayLogs[targetDateForEdit]?.importantEvents) ||
@@ -610,8 +657,10 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
 
     try {
       const syncRes = await syncEventAction('update', targetDateForEdit, formatted, item.parsed.title);
-      setGcalStatusMsg(syncRes.message);
-      setTimeout(() => setGcalStatusMsg(null), 3500);
+      if (syncRes.message) {
+        setGcalStatusMsg(syncRes.message);
+        setTimeout(() => setGcalStatusMsg(null), 3500);
+      }
     } catch (err) {
       console.warn(err);
     }
@@ -623,6 +672,8 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
     setEditingEventText(item.parsed.title);
     setEditingEventRecurrence(item.parsed.recurrence);
     setEditingEventEndDate(item.parsed.endDate || selectedDate);
+    setEditingEventTime(item.parsed.eventTime || '');
+    setEditingEventRemind(item.parsed.reminderEnabled !== false);
     setEditingEventDays(
       item.parsed.repeatDays && item.parsed.repeatDays.length > 0
         ? item.parsed.repeatDays
@@ -639,13 +690,16 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
     if (!trimmed) {
       setEventPendingDelete(item);
     } else {
+      const timeToUse = editingEventTime.trim() || undefined;
       const formatted = formatEventItem(
         editingEventIcon,
         trimmed,
         editingEventRecurrence,
         targetDateForEdit,
         editingEventRecurrence === 'weekly-custom' ? editingEventDays : undefined,
-        editingEventRecurrence === 'date-range' ? editingEventEndDate : undefined
+        editingEventRecurrence === 'date-range' ? editingEventEndDate : undefined,
+        timeToUse,
+        timeToUse ? editingEventRemind : true
       );
       const sourceLogEvents =
         (allDayLogs && allDayLogs[targetDateForEdit]?.importantEvents) ||
@@ -655,8 +709,10 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
 
       try {
         const syncRes = await syncEventAction('update', targetDateForEdit, formatted, item.parsed.title);
-        setGcalStatusMsg(syncRes.message);
-        setTimeout(() => setGcalStatusMsg(null), 3500);
+        if (syncRes.message) {
+          setGcalStatusMsg(syncRes.message);
+          setTimeout(() => setGcalStatusMsg(null), 3500);
+        }
       } catch (err) {
         console.warn(err);
       }
@@ -664,6 +720,8 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
     setEditingEventIndex(null);
     setEditingEventText('');
     setEditingEventEndDate('');
+    setEditingEventTime('');
+    setEditingEventRemind(true);
     setEditingPickerOpen(false);
     setEditingRecurrencePickerOpen(false);
   };
@@ -672,6 +730,8 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
     setEditingEventIndex(null);
     setEditingEventText('');
     setEditingEventEndDate('');
+    setEditingEventTime('');
+    setEditingEventRemind(true);
     setEditingPickerOpen(false);
     setEditingRecurrencePickerOpen(false);
   };
@@ -738,11 +798,27 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
     }
   };
 
-  // Thoughts & Gratitude
+  // Thoughts, Journal Entry Status & Gratitude
   const dailyThoughts = dayLog?.dailyThoughts || '';
+  const journalEntryNote = dayLog?.journalEntryNote || '';
+  const [isJournalNoteMenuOpen, setIsJournalNoteMenuOpen] = useState(false);
+  const [isOverlayRevealed, setIsOverlayRevealed] = useState(false);
+  const [isChangingOverlayStatus, setIsChangingOverlayStatus] = useState(false);
+
+  useEffect(() => {
+    setIsOverlayRevealed(false);
+    setIsChangingOverlayStatus(false);
+  }, [selectedDate]);
+
   const currentMood = dayLog?.mood;
   const currentMoods: MoodType[] = dayLog?.moods || (dayLog?.mood ? [dayLog.mood] : []);
+  const currentCustomMoods: CustomMoodItem[] = dayLog?.customMoods || [];
+  const savedCustomMoodsBank: CustomMoodItem[] = settings.savedCustomMoods || [];
   const gratitude = dayLog?.gratitude || '';
+
+  const [isAddingCustomMood, setIsAddingCustomMood] = useState(false);
+  const [customMoodEmojiInput, setCustomMoodEmojiInput] = useState('');
+  const [customMoodLabelInput, setCustomMoodLabelInput] = useState('');
 
   const handleToggleDayMood = (mType: MoodType) => {
     const isSelected = currentMoods.includes(mType);
@@ -754,6 +830,69 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
       mood: nextMoods[0] || undefined,
       moods: nextMoods,
     });
+  };
+
+  const handleToggleCustomMoodItem = (item: CustomMoodItem) => {
+    const isSelected = currentCustomMoods.some((c) => c.emoji === item.emoji);
+    const next = isSelected
+      ? currentCustomMoods.filter((c) => c.emoji !== item.emoji)
+      : [...currentCustomMoods, { emoji: item.emoji, label: item.label }];
+    onUpdateDayLog(selectedDate, { customMoods: next });
+  };
+
+  const handleAddCustomMood = (emojiStr: string, labelStr?: string) => {
+    const cleanedEmoji = emojiStr.trim();
+    if (!cleanedEmoji) return;
+    const cleanedLabel = labelStr?.trim() || undefined;
+
+    // If a label/definition was provided, save this custom mood permanently in the mood bank
+    if (cleanedLabel && onUpdateSettings) {
+      const existsInBank = savedCustomMoodsBank.some((c) => c.emoji === cleanedEmoji);
+      const nextBank = existsInBank
+        ? savedCustomMoodsBank.map((c) =>
+            c.emoji === cleanedEmoji ? { emoji: cleanedEmoji, label: cleanedLabel } : c
+          )
+        : [...savedCustomMoodsBank, { emoji: cleanedEmoji, label: cleanedLabel }];
+      onUpdateSettings({ savedCustomMoods: nextBank });
+    }
+
+    // Also mark it selected for today
+    const existsToday = currentCustomMoods.some((c) => c.emoji === cleanedEmoji);
+    const nextToday = existsToday
+      ? currentCustomMoods.map((c) =>
+          c.emoji === cleanedEmoji ? { ...c, label: cleanedLabel || c.label } : c
+        )
+      : [...currentCustomMoods, { emoji: cleanedEmoji, label: cleanedLabel }];
+    onUpdateDayLog(selectedDate, { customMoods: nextToday });
+
+    setCustomMoodEmojiInput('');
+    setCustomMoodLabelInput('');
+    setIsAddingCustomMood(false);
+  };
+
+  const handleRemoveCustomMoodFromBank = (emojiStr: string) => {
+    if (onUpdateSettings && savedCustomMoodsBank.some((c) => c.emoji === emojiStr)) {
+      onUpdateSettings({
+        savedCustomMoods: savedCustomMoodsBank.filter((c) => c.emoji !== emojiStr),
+      });
+    }
+    if (currentCustomMoods.some((c) => c.emoji === emojiStr)) {
+      onUpdateDayLog(selectedDate, {
+        customMoods: currentCustomMoods.filter((c) => c.emoji !== emojiStr),
+      });
+    }
+  };
+
+  const handleSelectJournalEntryNote = (noteText: string) => {
+    if (journalEntryNote === noteText) {
+      onUpdateDayLog(selectedDate, { journalEntryNote: '' });
+      setIsOverlayRevealed(false);
+    } else {
+      onUpdateDayLog(selectedDate, { journalEntryNote: noteText });
+      setIsOverlayRevealed(false);
+    }
+    setIsJournalNoteMenuOpen(false);
+    setIsChangingOverlayStatus(false);
   };
 
   // Pink Flower & Cycle Tracking
@@ -1071,7 +1210,21 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
             <span>← Calendar</span>
           </button>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setIsJournalNoteMenuOpen((prev) => !prev)}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition cursor-pointer border shadow-2xs ${
+                journalEntryNote || isJournalNoteMenuOpen
+                  ? 'bg-pink-100 border-pink-300 text-pink-950 font-semibold'
+                  : 'bg-white hover:bg-pink-50 text-pink-900 border-pink-200'
+              }`}
+              title="Mark why today's Daily Planner page is brief or skipped"
+            >
+              <span>📝</span>
+              <span>{journalEntryNote ? 'Edit Day Status' : 'Brief / Skip Day?'}</span>
+            </button>
+
             <button
               type="button"
               onClick={() => {
@@ -1146,7 +1299,151 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
             )}
           </div>
         </div>
+
+        {/* Header Day Status Banner (shown when user temporarily revealed planner to edit) */}
+        {journalEntryNote && isOverlayRevealed && (
+          <div className="mt-3 max-w-xl mx-auto px-3.5 py-1.5 rounded-xl bg-pink-50/90 border border-pink-200 flex items-center justify-between gap-2 text-xs text-pink-950 animate-in fade-in">
+            <span className="font-medium text-left truncate">{journalEntryNote}</span>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsOverlayRevealed(false)}
+                className="px-2 py-0.5 rounded-lg bg-pink-500 hover:bg-pink-600 text-white text-[10.5px] font-semibold transition cursor-pointer"
+                title="Cover planner again"
+              >
+                Cover Planner
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onUpdateDayLog(selectedDate, { journalEntryNote: '' });
+                  setIsOverlayRevealed(false);
+                }}
+                className="text-stone-400 hover:text-rose-600 p-0.5 rounded transition cursor-pointer shrink-0"
+                title="Clear day status"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Quick Whole-Page Entry Status Picker */}
+        {isJournalNoteMenuOpen && (
+          <div className="mt-3 max-w-2xl mx-auto p-3 rounded-2xl bg-pink-50/80 border border-pink-200 space-y-2 text-left animate-in fade-in">
+            <div className="flex items-center justify-between text-[11px] font-bold text-pink-900">
+              <span>Didn&apos;t fill out your full Daily Planner today? Choose a quick status:</span>
+              <button
+                type="button"
+                onClick={() => setIsJournalNoteMenuOpen(false)}
+                className="text-stone-400 hover:text-stone-700 text-xs px-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {JOURNAL_ENTRY_OPTIONS.map((opt) => {
+                const fullText = `${opt.emoji} ${opt.label}`;
+                const isSelected = journalEntryNote === fullText;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => handleSelectJournalEntryNote(fullText)}
+                    className={`px-2.5 py-1 rounded-xl text-[11px] font-medium border transition cursor-pointer flex items-center gap-1 ${
+                      isSelected
+                        ? 'bg-pink-500 text-white border-pink-600 shadow-2xs'
+                        : 'bg-white hover:bg-pink-100/70 text-pink-950 border-pink-200'
+                    }`}
+                  >
+                    <span>{opt.emoji}</span>
+                    <span>{opt.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* ========================================================
+          PLANNER BODY WRAPPER (From Important Events down to Notes)
+          Covered with semi-transparent pink veil when Day Status is active
+         ======================================================== */}
+      <div className="relative rounded-3xl">
+        {journalEntryNote && !isOverlayRevealed && (
+          <div className="absolute inset-0 z-30 rounded-3xl bg-pink-100/85 backdrop-blur-md border-2 border-pink-200/90 flex items-start justify-center py-10 sm:py-16 px-4 sm:px-8 animate-in fade-in duration-300">
+            <div className="sticky top-[calc(50vh-130px)] w-full max-w-lg mx-auto flex flex-col items-center text-center gap-3 p-5 sm:p-7 rounded-3xl bg-white/95 border-2 border-pink-300/90 shadow-xl">
+              <span className="text-[10.5px] font-bold uppercase tracking-widest text-pink-500">
+                Daily Planner Status
+              </span>
+
+              <button
+                type="button"
+                onClick={() => setIsChangingOverlayStatus((prev) => !prev)}
+                className="w-full px-5 py-3.5 rounded-2xl bg-gradient-to-r from-pink-50 via-rose-50 to-pink-50 hover:from-pink-100 hover:to-rose-100 border border-pink-300 text-pink-950 text-sm sm:text-base font-semibold shadow-xs transition cursor-pointer flex items-center justify-center gap-2 text-center"
+                title="Click to switch status"
+              >
+                <span>{journalEntryNote}</span>
+              </button>
+
+              {isChangingOverlayStatus && (
+                <div className="w-full p-2.5 rounded-2xl bg-pink-50/70 border border-pink-200 max-h-52 overflow-y-auto flex flex-wrap justify-center gap-1.5 animate-in fade-in">
+                  {JOURNAL_ENTRY_OPTIONS.map((opt) => {
+                    const fullText = `${opt.emoji} ${opt.label}`;
+                    const isSelected = journalEntryNote === fullText;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => handleSelectJournalEntryNote(fullText)}
+                        className={`px-2.5 py-1 rounded-xl text-[11px] font-medium border transition cursor-pointer flex items-center gap-1 ${
+                          isSelected
+                            ? 'bg-pink-500 text-white border-pink-600 shadow-2xs'
+                            : 'bg-white hover:bg-pink-100/70 text-pink-950 border-pink-200'
+                        }`}
+                      >
+                        <span>{opt.emoji}</span>
+                        <span>{opt.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsOverlayRevealed(true);
+                    setIsChangingOverlayStatus(false);
+                  }}
+                  className="px-3 py-1.5 rounded-full bg-pink-50 hover:bg-pink-100 text-pink-900 border border-pink-200 text-xs font-medium transition cursor-pointer"
+                >
+                  View / Edit Briefly
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsChangingOverlayStatus((prev) => !prev)}
+                  className="px-3 py-1.5 rounded-full bg-pink-50 hover:bg-pink-100 text-pink-900 border border-pink-200 text-xs font-medium transition cursor-pointer"
+                >
+                  {isChangingOverlayStatus ? 'Hide Options' : 'Change Status'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onUpdateDayLog(selectedDate, { journalEntryNote: '' });
+                    setIsOverlayRevealed(false);
+                    setIsChangingOverlayStatus(false);
+                  }}
+                  className="px-3 py-1.5 rounded-full bg-white hover:bg-rose-50 text-stone-600 hover:text-rose-600 border border-stone-200 text-xs font-medium transition cursor-pointer"
+                >
+                  Clear Status
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
       {/* ========================================================
           IMPORTANT EVENTS (Aesthetic Stationery Ribbon Card)
@@ -1482,9 +1779,46 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                           handleCancelEditEvent();
                         }
                       }}
-                      className="px-2.5 py-1 text-xs text-pink-950 bg-pink-50/40 rounded-lg focus:outline-none min-w-[150px] sm:min-w-[190px]"
+                      className="px-2.5 py-1 text-xs text-pink-950 bg-pink-50/40 rounded-lg focus:outline-none min-w-[140px] sm:min-w-[175px]"
                       placeholder="Event title..."
                     />
+
+                    {/* Inline Time & Reminder in Edit Mode */}
+                    <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-pink-50/80 border border-pink-200">
+                      <Clock className="w-3 h-3 text-pink-500 shrink-0" />
+                      <input
+                        type="time"
+                        value={editingEventTime}
+                        onChange={(e) => setEditingEventTime(e.target.value)}
+                        className="text-[11px] font-mono text-pink-950 bg-transparent focus:outline-none cursor-pointer"
+                        title="Optional event time"
+                      />
+                      {editingEventTime && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setEditingEventRemind((prev) => !prev)}
+                            className={`p-0.5 rounded transition cursor-pointer ${
+                              editingEventRemind
+                                ? 'text-pink-600 hover:bg-pink-100'
+                                : 'text-stone-400 hover:bg-stone-100'
+                            }`}
+                            title={editingEventRemind ? 'Reminder alert ON (click to mute)' : 'Time only — no alert (click to enable)'}
+                          >
+                            {editingEventRemind ? <Bell className="w-3 h-3" /> : <BellOff className="w-3 h-3" />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingEventTime('')}
+                            className="text-stone-400 hover:text-rose-500 text-[10px] px-0.5 cursor-pointer"
+                            title="Clear time"
+                          >
+                            ✕
+                          </button>
+                        </>
+                      )}
+                    </div>
+
                     <button
                       type="button"
                       onClick={() => handleSaveEditEvent(item)}
@@ -1559,6 +1893,30 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                   >
                     {parsed.title}
                   </span>
+
+                  {/* Event Time & Reminder Badge */}
+                  {parsed.eventTime && (
+                    <span
+                      onClick={() => handleStartEditEvent(idx, item)}
+                      className={`text-[10px] px-1.5 py-0.5 rounded-md border font-mono font-semibold inline-flex items-center gap-1 cursor-pointer transition ${
+                        parsed.reminderEnabled !== false
+                          ? 'bg-pink-50 text-pink-800 border-pink-200 hover:bg-pink-100'
+                          : 'bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100'
+                      }`}
+                      title={
+                        parsed.reminderEnabled !== false
+                          ? `Alert chime scheduled at ${parsed.eventTime}`
+                          : `Scheduled at ${parsed.eventTime} (silent)`
+                      }
+                    >
+                      {parsed.reminderEnabled !== false ? (
+                        <Bell className="w-2.5 h-2.5 text-pink-500" />
+                      ) : (
+                        <Clock className="w-2.5 h-2.5 text-stone-400" />
+                      )}
+                      <span>{parsed.eventTime}</span>
+                    </span>
+                  )}
 
                   {/* Recurrence Badges - 100% English */}
                   {parsed.recurrence === 'date-range' && (
@@ -2018,6 +2376,26 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                 </div>
               )}
             </div>
+            {/* 3. Time & Reminder Toggle Button on the side */}
+            <button
+              type="button"
+              onClick={() => setIsTimePickerOpen((prev) => !prev)}
+              className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border shadow-2xs transition cursor-pointer text-xs font-medium shrink-0 ${
+                newEventTime
+                  ? 'bg-pink-100 border-pink-400 text-pink-950 font-semibold'
+                  : 'bg-white border-pink-300 hover:border-pink-400 hover:bg-pink-50/70 text-pink-950'
+              }`}
+              title="Set specific time & reminder alert"
+            >
+              {newEventTime && newEventRemind ? (
+                <Bell className="w-3.5 h-3.5 text-pink-600" />
+              ) : (
+                <Clock className="w-3.5 h-3.5 text-pink-500" />
+              )}
+              <span className="font-mono text-[11px]">
+                {newEventTime ? newEventTime : 'Time'}
+              </span>
+            </button>
           </div>
 
           {/* Event Title Input */}
@@ -2026,7 +2404,7 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
               type="text"
               value={newEventText}
               onChange={(e) => setNewEventText(e.target.value)}
-              placeholder="Event, trip or routine title (e.g. Flight to London, Yoga Retreat, Seminar)..."
+              placeholder="Event, workout, trip or appointment title..."
               className="w-full px-3.5 py-2 text-xs bg-white rounded-xl border border-pink-200 focus:outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-200/50 text-pink-950 placeholder:text-pink-300 shadow-2xs transition"
             />
           </div>
@@ -2041,6 +2419,71 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
             <span>Add Event</span>
           </button>
         </form>
+
+        {/* Inline Time & Reminder Picker Bar */}
+        {(isTimePickerOpen || newEventTime) && (
+          <div className="mt-2.5 p-2.5 rounded-2xl bg-pink-50/80 border border-pink-200 flex flex-wrap items-center justify-between gap-2 shadow-2xs animate-in fade-in">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-pink-950 font-medium">
+              <span className="flex items-center gap-1 font-semibold">
+                <Clock className="w-3.5 h-3.5 text-pink-500" />
+                <span>Event Time:</span>
+              </span>
+              <input
+                type="time"
+                value={newEventTime}
+                onChange={(e) => setNewEventTime(e.target.value)}
+                className="px-2 py-1 text-xs font-mono font-bold bg-white rounded-lg border border-pink-300 text-pink-950 focus:outline-none focus:ring-1 focus:ring-pink-400"
+              />
+              {newEventTime && (
+                <button
+                  type="button"
+                  onClick={() => setNewEventRemind((prev) => !prev)}
+                  className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold flex items-center gap-1 transition cursor-pointer ${
+                    newEventRemind
+                      ? 'bg-pink-500 text-white border-pink-600 shadow-2xs'
+                      : 'bg-white text-stone-600 border-stone-200 hover:bg-stone-50'
+                  }`}
+                >
+                  {newEventRemind ? <Bell className="w-3 h-3" /> : <BellOff className="w-3 h-3" />}
+                  <span>{newEventRemind ? 'Alert Reminder ON' : 'Time Only (No Alert)'}</span>
+                </button>
+              )}
+              {newEventTime && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewEventTime('');
+                    setIsTimePickerOpen(false);
+                  }}
+                  className="text-[11px] text-stone-500 hover:text-rose-600 underline cursor-pointer"
+                >
+                  Clear Time
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1 flex-wrap text-[10px]">
+              <span className="text-pink-500 font-medium">Quick times:</span>
+              {['08:00', '10:00', '12:00', '16:00', '18:00', '19:30', '21:00'].map((tPreset) => (
+                <button
+                  key={tPreset}
+                  type="button"
+                  onClick={() => {
+                    setNewEventTime(tPreset);
+                    setNewEventRemind(true);
+                  }}
+                  className={`px-2 py-0.5 rounded-md border font-mono font-medium cursor-pointer transition ${
+                    newEventTime === tPreset
+                      ? 'bg-pink-500 text-white border-pink-600'
+                      : 'bg-white border-pink-200 text-pink-800 hover:bg-pink-100'
+                  }`}
+                >
+                  {tPreset}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Inline Date Range Picker if date-range is active */}
         {newEventRecurrence === 'date-range' && (
@@ -2579,14 +3022,29 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
             </div>
           </div>
 
-          {/* 3. MOOD TODAY (Image 2 style: 5 cute faces with labels) */}
+          {/* 3. MOOD TODAY (3 per row + Custom Emoji option) */}
           <div className="p-3.5 rounded-2xl bg-white border border-pink-200/90 shadow-2xs">
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-xs font-bold text-pink-950 uppercase tracking-wider flex items-center gap-1">
                 <span>✦</span>
                 <span>Mood Today</span>
               </h3>
-              <span className="text-sm">🎀</span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setIsAddingCustomMood((prev) => !prev)}
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border transition cursor-pointer flex items-center gap-1 ${
+                    isAddingCustomMood
+                      ? 'bg-pink-500 text-white border-pink-600'
+                      : 'bg-pink-50 hover:bg-pink-100 text-pink-700 border-pink-200'
+                  }`}
+                  title="Add your own custom mood emoji"
+                >
+                  <Plus className="w-2.5 h-2.5" />
+                  <span>Add Emoji</span>
+                </button>
+                <span className="text-sm">🎀</span>
+              </div>
             </div>
 
             <div className="grid grid-cols-3 gap-2 text-center">
@@ -2599,7 +3057,7 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                     onClick={() => handleToggleDayMood(m.type)}
                     className={`py-2 px-1.5 rounded-xl flex flex-col items-center justify-center gap-1 border transition-all cursor-pointer ${
                       isSelected
-                        ? 'bg-pink-100 border-pink-400 ring-2 ring-pink-300 shadow-2xs font-bold scale-[1.02]'
+                        ? 'bg-pink-100/90 border-pink-400 shadow-2xs font-bold'
                         : 'bg-pink-50/25 hover:bg-pink-50/80 border-pink-100 text-pink-900 opacity-75 hover:opacity-100'
                     }`}
                     title={isSelected ? `Click to deselect ${m.label}` : `Select ${m.label}`}
@@ -2609,7 +3067,126 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
                   </button>
                 );
               })}
+
+              {/* Saved Mood Bank + Today's Custom Emojis (3 per row, toggleable) */}
+              {(() => {
+                const mergedCustomPool: CustomMoodItem[] = [...savedCustomMoodsBank];
+                currentCustomMoods.forEach((cm) => {
+                  if (!mergedCustomPool.some((b) => b.emoji === cm.emoji)) {
+                    mergedCustomPool.push(cm);
+                  }
+                });
+                return mergedCustomPool.map((cm) => {
+                  const isSelected = currentCustomMoods.some((c) => c.emoji === cm.emoji);
+                  const isSavedInBank = savedCustomMoodsBank.some((b) => b.emoji === cm.emoji);
+                  return (
+                    <div
+                      key={cm.emoji}
+                      className={`group relative py-2 px-1.5 rounded-xl flex flex-col items-center justify-center gap-1 border transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-pink-100/90 border-pink-400 shadow-2xs font-bold'
+                          : 'bg-pink-50/25 hover:bg-pink-50/80 border-pink-100 text-pink-900 opacity-75 hover:opacity-100'
+                      }`}
+                      onClick={() => handleToggleCustomMoodItem(cm)}
+                      title={
+                        isSelected
+                          ? `Click to deselect ${cm.label || cm.emoji}`
+                          : `Click to select ${cm.label || cm.emoji}`
+                      }
+                    >
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveCustomMoodFromBank(cm.emoji);
+                        }}
+                        className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-white border border-pink-300 text-stone-500 hover:text-rose-600 hover:border-rose-300 flex items-center justify-center text-[9px] shadow-2xs cursor-pointer opacity-0 group-hover:opacity-100 transition"
+                        title={isSavedInBank ? 'Delete from saved mood bank' : 'Remove custom mood'}
+                      >
+                        ✕
+                      </button>
+                      <span className="text-xl select-none leading-none">{cm.emoji}</span>
+                      <span className="text-[10.5px] font-semibold text-pink-950 leading-tight truncate max-w-full">
+                        {cm.label || 'Custom'}
+                      </span>
+                    </div>
+                  );
+                });
+              })()}
             </div>
+
+            {/* Inline Custom Emoji Adder */}
+            {isAddingCustomMood && (
+              <div className="mt-2.5 p-2.5 rounded-xl bg-pink-50/70 border border-pink-200 space-y-2 animate-in fade-in">
+                <div className="flex items-center justify-between text-[10px] font-bold text-pink-900">
+                  <span>Add Custom Mood Emoji</span>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingCustomMood(false)}
+                    className="text-stone-400 hover:text-stone-700 text-xs px-1 cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Type or paste ANY emoji + optional label */}
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    value={customMoodEmojiInput}
+                    onChange={(e) => setCustomMoodEmojiInput(e.target.value)}
+                    placeholder="Emoji 😊"
+                    maxLength={8}
+                    className="w-20 px-2 py-1 text-center text-sm bg-white rounded-lg border border-pink-200 focus:outline-none focus:border-pink-400"
+                    autoFocus
+                  />
+                  <input
+                    type="text"
+                    value={customMoodLabelInput}
+                    onChange={(e) => setCustomMoodLabelInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddCustomMood(customMoodEmojiInput, customMoodLabelInput);
+                      }
+                    }}
+                    placeholder="Label (saves to mood bank)"
+                    className="flex-1 min-w-0 px-2 py-1 text-xs bg-white rounded-lg border border-pink-200 focus:outline-none focus:border-pink-400 text-pink-950"
+                  />
+                  <button
+                    type="button"
+                    disabled={!customMoodEmojiInput.trim()}
+                    onClick={() => handleAddCustomMood(customMoodEmojiInput, customMoodLabelInput)}
+                    className="px-2.5 py-1 rounded-lg bg-pink-500 hover:bg-pink-600 disabled:opacity-40 text-white text-[11px] font-semibold cursor-pointer shrink-0"
+                  >
+                    Add
+                  </button>
+                </div>
+                <p className="text-[9.5px] text-pink-700/80">
+                  Adding a label saves this emoji permanently to your Mood Today bank across all days.
+                </p>
+
+                {/* Quick extra emoji picks */}
+                <div className="pt-1 border-t border-pink-100">
+                  <span className="text-[9.5px] text-pink-700/80 font-medium block mb-1">
+                    Or pick an emoji (type any emoji above):
+                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    {EXTRA_MOOD_EMOJIS.map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => handleAddCustomMood(emoji, customMoodLabelInput)}
+                        className="w-7 h-7 rounded-lg bg-white hover:bg-pink-100 border border-pink-200/80 flex items-center justify-center text-sm transition cursor-pointer hover:scale-110"
+                        title={`Add ${emoji} to today's mood`}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 4. TODAY I'M GRATEFUL FOR (Image 2 style with heart bullets ♡ and flower) */}
@@ -3531,10 +4108,10 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
         {/* Pink washi tape strip at top of notes */}
         <div className="w-16 h-2.5 bg-pink-200/90 mx-auto mb-2 rounded-xs shadow-2xs" />
 
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
           <h3 className="text-xs font-bold text-pink-950 uppercase tracking-wider flex items-center gap-1">
             <Lightbulb className="w-3.5 h-3.5 text-pink-500" />
-            <span>Notes & Inspiration</span>
+            <span>Notes & Daily Story</span>
           </h3>
           <span className="text-[11px] text-pink-500 font-script">focus • plan • succeed ♡</span>
         </div>
@@ -3543,7 +4120,7 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
           rows={3}
           value={dailyThoughts}
           onChange={(e) => onUpdateDayLog(selectedDate, { dailyThoughts: e.target.value })}
-          placeholder="Jot down notes, sudden thoughts, project sparks or gentle reminders..."
+          placeholder="Jot down today's story, sudden thoughts, highlights, or what you remember..."
           className="w-full max-w-full box-border p-3 text-xs bg-white/95 rounded-xl border border-pink-200 focus:outline-none focus:ring-1 focus:ring-pink-300 text-pink-950 resize-none leading-relaxed shadow-2xs"
         />
 
@@ -3551,6 +4128,7 @@ export const DayBookPage: React.FC<DayBookPageProps> = ({
         <div className="text-center mt-2 text-xs font-script text-pink-700 tracking-wide">
           ♥ Small steps every day lead to big changes. ♥
         </div>
+      </div>
       </div>
     </div>
   );

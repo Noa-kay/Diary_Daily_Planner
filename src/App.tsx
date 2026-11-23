@@ -202,7 +202,16 @@ export default function App() {
       const rawSourceEvents = sourceDayLog?.importantEvents || [];
       const movedSourceEvents = rawSourceEvents.map((raw) => {
         const parsed = parseEventItem(raw);
-        return formatEventItem(parsed.icon, parsed.title, parsed.recurrence, toDate, parsed.repeatDays);
+        return formatEventItem(
+          parsed.icon,
+          parsed.title,
+          parsed.recurrence,
+          toDate,
+          parsed.repeatDays,
+          parsed.endDate,
+          parsed.eventTime,
+          parsed.reminderEnabled
+        );
       });
 
       // Also scan other dayLogs: if any event anywhere had recurrence pointing to fromDate, update it to toDate
@@ -212,7 +221,16 @@ export default function App() {
           dLog.importantEvents = dLog.importantEvents.map((raw) => {
             const parsed = parseEventItem(raw);
             if (parsed.originalDate === fromDate) {
-              return formatEventItem(parsed.icon, parsed.title, parsed.recurrence, toDate, parsed.repeatDays);
+              return formatEventItem(
+                parsed.icon,
+                parsed.title,
+                parsed.recurrence,
+                toDate,
+                parsed.repeatDays,
+                parsed.endDate,
+                parsed.eventTime,
+                parsed.reminderEnabled
+              );
             }
             return raw;
           });
@@ -310,11 +328,23 @@ export default function App() {
         gratitude: newGratitude,
         dailyNote: newDailyNote,
         dailyThoughts: newDailyThoughts,
+        journalEntryNote: conflict === 'replace' ? sourceDayLog?.journalEntryNote : (targetDayLog.journalEntryNote || sourceDayLog?.journalEntryNote),
         habitsProgress: newHabits,
         witItems: newWit,
         dailyAffirmation: conflict === 'replace' ? sourceDayLog?.dailyAffirmation : (targetDayLog.dailyAffirmation || sourceDayLog?.dailyAffirmation),
         middayCheckIn: conflict === 'replace' ? sourceDayLog?.middayCheckIn : (targetDayLog.middayCheckIn || sourceDayLog?.middayCheckIn),
         mood: conflict === 'replace' ? sourceDayLog?.mood : (targetDayLog.mood || sourceDayLog?.mood),
+        moods: conflict === 'replace'
+          ? sourceDayLog?.moods
+          : Array.from(new Set([...(targetDayLog.moods || []), ...(sourceDayLog?.moods || [])])),
+        customMoods: conflict === 'replace'
+          ? sourceDayLog?.customMoods
+          : [
+              ...(targetDayLog.customMoods || []),
+              ...(sourceDayLog?.customMoods || []).filter(
+                (cm) => !(targetDayLog.customMoods || []).some((tcm) => tcm.emoji === cm.emoji)
+              ),
+            ],
         energyLevel: conflict === 'replace' ? sourceDayLog?.energyLevel : (targetDayLog.energyLevel || sourceDayLog?.energyLevel),
         meals: {
           breakfast: conflict === 'replace' ? sourceDayLog?.meals?.breakfast : (targetDayLog.meals?.breakfast || sourceDayLog?.meals?.breakfast),
@@ -575,6 +605,7 @@ export default function App() {
                 habits={db.habits}
                 onUpdateHabits={handleUpdateHabits}
                 settings={db.settings}
+                onUpdateSettings={handleUpdateSettings}
                 onOpenJokesDigest={() => setCurrentView('jokes-digest')}
                 onTransferDay={handleTransferDay}
               />
